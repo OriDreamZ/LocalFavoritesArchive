@@ -26,12 +26,21 @@ class TagPayload(BaseModel):
         return value
 
 
+class ArchiveSettingsPayload(BaseModel):
+    stop_after_existing: int = Field(ge=0, le=100000)
+
+
 def create_app(settings: Settings) -> FastAPI:
     settings.ensure_dirs()
     store = ArchiveStore(settings.archive_root)
     app = FastAPI(title="Local Favorites Archive")
     static = Path(__file__).parent / "static"
-    state: dict[str, Any] = {"state": "idle"}
+    state: dict[str, Any] = {
+        "state": "idle",
+        "existing_streak": 0,
+        "stop_after_existing": store.get_stop_after_existing(),
+        "stop_requested": False,
+    }
     download_lock = asyncio.Lock()
     background_tasks: set[asyncio.Task] = set()
 
@@ -66,6 +75,16 @@ def create_app(settings: Settings) -> FastAPI:
     @app.get("/api/sync/failures")
     def sync_failures():
         return store.list_media_failures()
+
+    @app.get("/api/settings")
+    def archive_settings():
+        return {"stop_after_existing": store.get_stop_after_existing()}
+
+    @app.patch("/api/settings")
+    def update_archive_settings(payload: ArchiveSettingsPayload):
+        value = store.set_stop_after_existing(payload.stop_after_existing)
+        state["stop_after_existing"] = value
+        return {"stop_after_existing": value}
 
     @app.get("/api/posts/{post_id}")
     def post(post_id: str):
@@ -125,19 +144,44 @@ def create_app(settings: Settings) -> FastAPI:
     @app.post("/api/ingest/x-response")
     async def ingest_x_response(payload: dict[str, Any]):
         posts = posts_from_x_response(payload)
-        added = sum(1 for value in posts if store.upsert_post(value))
+        existing_streak = state.get("existing_streak", 0)
+        added = 0
+        for value in posts:
+            if store.upsert_post(value):
+                added += 1
+                existing_streak = 0
+            else:
+                existing_streak += 1
+        threshold = store.get_stop_after_existing()
+        stop_requested = state.get("stop_requested", False) or (
+            threshold > 0 and existing_streak >= threshold
+        )
         state.update({
             "state": "collecting",
             "discovered": state.get("discovered", 0) + len(posts),
             "new": state.get("new", 0) + added,
+            "existing_streak": existing_streak,
+            "stop_after_existing": threshold,
+            "stop_requested": stop_requested,
             "message": "正在从已登录的 Chrome 接收 Likes",
         })
         schedule(download_pending())
-        return {"discovered": len(posts), "new": added}
+        return {
+            "discovered": len(posts),
+            "new": added,
+            "existing_streak": existing_streak,
+            "stop_after_existing": threshold,
+            "stop_requested": stop_requested,
+        }
 
     @app.post("/api/ingest/start")
     def ingest_start():
         state.clear()
+        state.update({
+            "existing_streak": 0,
+            "stop_after_existing": store.get_stop_after_existing(),
+            "stop_requested": False,
+        })
         state.update({"state": "starting", "discovered": 0, "new": 0, "message": "Chrome 扩展已连接，正在打开 Likes 页面"})
         return {"state": "starting"}
 

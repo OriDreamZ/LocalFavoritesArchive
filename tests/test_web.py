@@ -4,6 +4,29 @@ from local_favorites_archive.config import Settings
 from local_favorites_archive.web import create_app
 
 
+def x_post(post_id: str) -> dict:
+    return {
+        "rest_id": post_id,
+        "core": {"user_results": {"result": {
+            "rest_id": "author-1",
+            "legacy": {"screen_name": "alice", "name": "Alice"},
+        }}},
+        "legacy": {
+            "full_text": f"post {post_id}",
+            "created_at": "Tue Jan 02 03:04:05 +0000 2024",
+        },
+    }
+
+
+def x_payload(*post_ids: str) -> dict:
+    return {"data": {"entries": [
+        {"entryId": f"tweet-{post_id}", "content": {"itemContent": {
+            "tweet_results": {"result": x_post(post_id)}
+        }}}
+        for post_id in post_ids
+    ]}}
+
+
 def test_local_api_and_ui(tmp_path):
     client = TestClient(create_app(Settings(archive_root=tmp_path)))
     assert client.get("/").status_code == 200
@@ -207,8 +230,65 @@ def test_ingest_x_response_persists_liked_post(tmp_path):
     response = client.post("/api/ingest/x-response", json=payload)
 
     assert response.status_code == 200
-    assert response.json() == {"discovered": 1, "new": 1}
+    result = response.json()
+    assert result["discovered"] == 1
+    assert result["new"] == 1
+    assert result["existing_streak"] == 0
+    assert result["stop_after_existing"] == 50
+    assert result["stop_requested"] is False
     assert client.get("/api/posts").json()[0]["text"] == "from chrome"
+
+
+def test_sync_settings_are_validated_and_persisted(tmp_path):
+    settings = Settings(archive_root=tmp_path)
+    client = TestClient(create_app(settings))
+
+    assert client.get("/api/settings").json() == {"stop_after_existing": 50}
+    assert client.patch("/api/settings", json={"stop_after_existing": 2}).json() == {
+        "stop_after_existing": 2
+    }
+    assert client.patch("/api/settings", json={"stop_after_existing": -1}).status_code == 422
+    assert client.patch("/api/settings", json={"stop_after_existing": 100001}).status_code == 422
+    assert TestClient(create_app(settings)).get("/api/settings").json() == {
+        "stop_after_existing": 2
+    }
+
+
+def test_existing_streak_crosses_batches_resets_on_new_and_latches_stop(tmp_path):
+    client = TestClient(create_app(Settings(archive_root=tmp_path)))
+    client.patch("/api/settings", json={"stop_after_existing": 2})
+    client.post("/api/ingest/x-response", json=x_payload("1", "2"))
+    client.post("/api/ingest/start")
+
+    first = client.post("/api/ingest/x-response", json=x_payload("1")).json()
+    assert first["existing_streak"] == 1
+    assert first["stop_requested"] is False
+
+    second = client.post("/api/ingest/x-response", json=x_payload("2")).json()
+    assert second["existing_streak"] == 2
+    assert second["stop_requested"] is True
+
+    latched = client.post("/api/ingest/x-response", json=x_payload("3")).json()
+    assert latched["existing_streak"] == 0
+    assert latched["stop_requested"] is True
+
+    client.post("/api/ingest/start")
+    status = client.get("/api/sync/status").json()
+    assert status["existing_streak"] == 0
+    assert status["stop_requested"] is False
+
+
+def test_zero_threshold_never_requests_stop(tmp_path):
+    client = TestClient(create_app(Settings(archive_root=tmp_path)))
+    client.patch("/api/settings", json={"stop_after_existing": 0})
+    client.post("/api/ingest/x-response", json=x_payload("1", "2", "3"))
+    client.post("/api/ingest/start")
+
+    result = client.post("/api/ingest/x-response", json=x_payload("1", "2", "3")).json()
+
+    assert result["existing_streak"] == 3
+    assert result["stop_after_existing"] == 0
+    assert result["stop_requested"] is False
 
 
 def test_extension_can_announce_start(tmp_path):
