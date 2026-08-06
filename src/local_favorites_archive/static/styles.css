@@ -116,6 +116,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   padding: 0 0 42px;
 }
 .hero-copy { max-width: 820px; }
+.hero-kicker { display: block; margin-bottom: 12px; color: var(--green); font-size: 11px; font-weight: 700; letter-spacing: 3px; }
 .hero h1 {
   margin: 0;
   font-family: Georgia, "Songti SC", STSong, serif;
@@ -329,7 +330,7 @@ dialog::backdrop { background: rgba(18, 28, 33, .48); }
 .viewer-nav { width: 40px; height: 54px; min-height: 54px; align-self: center; padding: 0; font-size: 32px; line-height: 1; }
 .viewer-caption { min-height: 34px; padding: 8px 12px; background: #192126; color: #c8d2d7; font-size: 12px; text-align: center; }
 
-@media (max-width: 1260px) {
+@media (max-width: 1500px) {
   #filters { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   #filters .search-field { grid-column: span 2; }
   #filters > button { grid-column: span 1; }

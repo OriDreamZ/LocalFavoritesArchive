@@ -48,6 +48,7 @@ def test_ui_uses_approved_archive_library_shell(tmp_path):
     assert 'id="hero-authors-total"' in html
     assert 'id="hero-sync-state"' in html
     assert "存下你的喜爱" in html
+    assert "PERSONAL CONTENT ARCHIVE" in html
     assert "喜欢过的内容，值得被找回。" in html
     assert "把 X 上稍纵即逝的喜欢" in html
 
