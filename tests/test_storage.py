@@ -147,3 +147,22 @@ def test_overview_stats_handles_empty_media_and_zero_months(tmp_path):
     assert stats["archive_days"] == 0
     assert stats["storage_bytes"] == 0
     assert [item["count"] for item in stats["monthly_additions"]] == [0] * 12
+
+
+def test_list_media_failures_joins_post_context(tmp_path):
+    store = ArchiveStore(tmp_path)
+    store.upsert_post(sample_post(post_id="7", handle="alice"))
+    with store._connect() as db:
+        db.execute("UPDATE media SET status='failed', error='timeout' WHERE post_id='7'")
+
+    assert store.list_media_failures() == [{
+        "post_id": "7",
+        "author_name": "Alice",
+        "author_handle": "alice",
+        "url": "https://x.com/alice/status/7",
+        "published_at": "2024-01-02T00:00:00+00:00",
+        "media_index": 0,
+        "kind": "image",
+        "source_url": "https://pbs.twimg.com/media/a.jpg?name=orig",
+        "error": "timeout",
+    }]

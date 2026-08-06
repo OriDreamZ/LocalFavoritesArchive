@@ -59,6 +59,14 @@ def create_app(settings: Settings) -> FastAPI:
     def post_count(q: str = "", author: str = "", media_type: str = "", date_from: str = "", date_to: str = "", tag_id: int | None = Query(None, ge=1)):
         return {"total": store.count_posts(q, author, media_type, date_from, date_to, tag_id)}
 
+    @app.get("/api/stats/overview")
+    def overview_stats():
+        return store.overview_stats()
+
+    @app.get("/api/sync/failures")
+    def sync_failures():
+        return store.list_media_failures()
+
     @app.get("/api/posts/{post_id}")
     def post(post_id: str):
         value = store.get_post(post_id)

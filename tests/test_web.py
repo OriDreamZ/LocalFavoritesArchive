@@ -196,3 +196,16 @@ def test_tag_api_validates_input_and_missing_records(tmp_path):
     assert client.post("/api/tags", json={"name": "valid", "color": "blue"}).status_code == 422
     assert client.patch("/api/tags/999", json={"name": "missing", "color": "#2563eb"}).status_code == 404
     assert client.post("/api/posts/missing/tags/999").status_code == 404
+
+
+def test_overview_and_failure_endpoints(tmp_path):
+    client = TestClient(create_app(Settings(archive_root=tmp_path)))
+
+    stats = client.get("/api/stats/overview")
+    failures = client.get("/api/sync/failures")
+
+    assert stats.status_code == 200
+    assert stats.json()["posts_total"] == 0
+    assert len(stats.json()["monthly_additions"]) == 12
+    assert failures.status_code == 200
+    assert failures.json() == []

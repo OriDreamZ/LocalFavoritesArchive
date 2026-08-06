@@ -209,6 +209,19 @@ class ArchiveStore:
             "monthly_additions": [{"month": month, "count": monthly_counts.get(month, 0)} for month in months],
         }
 
+    def list_media_failures(self, limit: int = 200) -> list[dict[str, Any]]:
+        with self._connect() as db:
+            rows = db.execute("""
+                SELECT m.post_id,p.author_name,p.author_handle,p.url,p.published_at,
+                       m.media_index,m.kind,m.source_url,m.error
+                FROM media m
+                JOIN posts p ON p.post_id=m.post_id
+                WHERE m.status='failed'
+                ORDER BY p.published_at DESC, m.media_index ASC
+                LIMIT ?
+            """, (limit,)).fetchall()
+            return [dict(row) for row in rows]
+
     def list_tags(self) -> list[dict[str, Any]]:
         with self._connect() as db:
             rows = db.execute("""
