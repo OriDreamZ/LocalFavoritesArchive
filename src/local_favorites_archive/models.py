@@ -18,6 +18,14 @@ class MediaItem:
 
 
 @dataclass
+class PostLink:
+    index: int
+    display_url: str
+    expanded_url: str
+    short_url: str
+
+
+@dataclass
 class Post:
     post_id: str
     url: str
@@ -32,3 +40,4 @@ class Post:
     language: str | None = None
     raw: dict[str, Any] = field(default_factory=dict)
     media: list[MediaItem] = field(default_factory=list)
+    links: list[PostLink] = field(default_factory=list)

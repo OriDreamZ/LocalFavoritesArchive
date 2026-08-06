@@ -2,15 +2,14 @@ from datetime import datetime, timezone
 import re
 from typing import Any
 
-from .models import MediaItem, Post
+from .models import MediaItem, Post, PostLink
 
 
 _URL_RE = re.compile(r"https?://\S+", re.IGNORECASE)
 
 
-def clean_post_text(text: str | None) -> str:
-    """Remove link tokens while preserving the readable line structure."""
-    lines = [re.sub(r"[ \t]+", " ", _URL_RE.sub("", line)).strip() for line in (text or "").splitlines()]
+def _normalize_whitespace(text: str) -> str:
+    lines = [re.sub(r"[ \t]+", " ", line).strip() for line in text.splitlines()]
     cleaned: list[str] = []
     for line in lines:
         if line or (cleaned and cleaned[-1]):
@@ -18,6 +17,35 @@ def clean_post_text(text: str | None) -> str:
     while cleaned and not cleaned[-1]:
         cleaned.pop()
     return "\n".join(cleaned)
+
+
+def normalize_post_text(
+    text: str | None,
+    url_entities: list[dict[str, Any]],
+    media_entities: list[dict[str, Any]],
+) -> tuple[str, list[PostLink]]:
+    source = text or ""
+    media_urls = {item.get("url") for item in media_entities if item.get("url")}
+    urls = {item.get("url"): item for item in url_entities if item.get("url")}
+    parts: list[str] = []
+    links: list[PostLink] = []
+    cursor = 0
+
+    for match in _URL_RE.finditer(source):
+        token = match.group(0)
+        parts.append(source[cursor:match.start()])
+        if token in media_urls:
+            replacement = ""
+        else:
+            entity = urls.get(token) or {}
+            replacement = entity.get("display_url") or entity.get("expanded_url") or token
+            expanded_url = entity.get("expanded_url") or token
+            links.append(PostLink(len(links), replacement, expanded_url, token))
+        parts.append(replacement)
+        cursor = match.end()
+
+    parts.append(source[cursor:])
+    return _normalize_whitespace("".join(parts)), links
 
 
 def _walk(value: Any):
@@ -99,12 +127,20 @@ def posts_from_x_response(payload: Any) -> list[Post]:
             if source:
                 info = item.get("original_info") or {}
                 media.append(MediaItem(index=index, kind=kind, source_url=source, mime_type=mime, width=info.get("width"), height=info.get("height")))
-        note_text = (((node.get("note_tweet") or {}).get("note_tweet_results") or {}).get("result") or {}).get("text")
+        note_result = (((node.get("note_tweet") or {}).get("note_tweet_results") or {}).get("result") or {})
+        note_text = note_result.get("text")
+        entities = legacy.get("entities") or {}
+        url_entities = ((note_result.get("entity_set") or {}).get("urls") or []) if note_text else (entities.get("urls") or [])
+        media_entities = [
+            *(entities.get("media") or []),
+            *((legacy.get("extended_entities") or {}).get("media") or []),
+        ]
+        normalized_text, links = normalize_post_text(note_text or legacy.get("full_text", ""), url_entities, media_entities)
         posts[str(post_id)] = Post(
             post_id=str(post_id), url=f"https://x.com/{handle or 'i'}/status/{post_id}",
-            text=clean_post_text(note_text or legacy.get("full_text", "")), author_id=str(user_result.get("rest_id") or ""),
+            text=normalized_text, author_id=str(user_result.get("rest_id") or ""),
             author_handle=handle, author_name=author_name, published_at=created,
             collected_at=datetime.now(timezone.utc), reply_to_id=legacy.get("in_reply_to_status_id_str"),
-            quote_id=legacy.get("quoted_status_id_str"), language=legacy.get("lang"), raw=node, media=media,
+            quote_id=legacy.get("quoted_status_id_str"), language=legacy.get("lang"), raw=node, media=media, links=links,
         )
     return list(posts.values())
