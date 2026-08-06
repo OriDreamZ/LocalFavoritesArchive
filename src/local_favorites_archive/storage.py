@@ -1,5 +1,6 @@
 import hashlib
 import json
+import shutil
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -94,6 +95,62 @@ class ArchiveStore:
                 (str(value),),
             )
         return value
+
+    def _owned_path(self, relative: str | Path) -> Path:
+        target = (self.root / relative).resolve()
+        root = self.root.resolve()
+        if target == root or root not in target.parents:
+            raise ValueError(f"archive path escapes root: {relative}")
+        return target
+
+    def delete_posts(self, post_ids: list[str]) -> dict[str, list[Any]]:
+        requested = list(dict.fromkeys(post_ids))
+        deleted: list[str] = []
+        not_found: list[str] = []
+        owned_paths: dict[str, tuple[Path, Path]] = {}
+        with self._connect() as db:
+            for post_id in requested:
+                row = db.execute(
+                    "SELECT raw_path FROM posts WHERE post_id=?", (post_id,)
+                ).fetchone()
+                if not row:
+                    not_found.append(post_id)
+                    continue
+                owned_paths[post_id] = (
+                    self._owned_path(row["raw_path"]),
+                    self._owned_path(self.media_dir.relative_to(self.root) / post_id),
+                )
+                db.execute("DELETE FROM media WHERE post_id=?", (post_id,))
+                db.execute("DELETE FROM post_links WHERE post_id=?", (post_id,))
+                db.execute("DELETE FROM post_tags WHERE post_id=?", (post_id,))
+                db.execute("DELETE FROM posts_fts WHERE post_id=?", (post_id,))
+                db.execute("DELETE FROM posts WHERE post_id=?", (post_id,))
+                deleted.append(post_id)
+
+        cleanup_errors: list[dict[str, str]] = []
+        for post_id, (raw_path, media_path) in owned_paths.items():
+            try:
+                raw_path.unlink(missing_ok=True)
+            except OSError as exc:
+                cleanup_errors.append({
+                    "post_id": post_id,
+                    "path": str(raw_path),
+                    "error": str(exc),
+                })
+            try:
+                if media_path.exists():
+                    shutil.rmtree(media_path)
+            except OSError as exc:
+                cleanup_errors.append({
+                    "post_id": post_id,
+                    "path": str(media_path),
+                    "error": str(exc),
+                })
+        return {
+            "deleted": deleted,
+            "not_found": not_found,
+            "file_cleanup_errors": cleanup_errors,
+        }
 
     def media_path(self, post_id: str, index: int, source_url: str) -> Path:
         suffix = Path(source_url.split("?")[0]).suffix.lower() or ".bin"

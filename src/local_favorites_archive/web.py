@@ -30,6 +30,18 @@ class ArchiveSettingsPayload(BaseModel):
     stop_after_existing: int = Field(ge=0, le=100000)
 
 
+class DeletePostsPayload(BaseModel):
+    post_ids: list[str] = Field(min_length=1, max_length=200)
+
+    @field_validator("post_ids")
+    @classmethod
+    def validate_post_ids(cls, values: list[str]) -> list[str]:
+        normalized = [value.strip() for value in values]
+        if any(not value for value in normalized):
+            raise ValueError("post IDs cannot be blank")
+        return list(dict.fromkeys(normalized))
+
+
 def create_app(settings: Settings) -> FastAPI:
     settings.ensure_dirs()
     store = ArchiveStore(settings.archive_root)
@@ -67,6 +79,10 @@ def create_app(settings: Settings) -> FastAPI:
     @app.get("/api/posts/count")
     def post_count(q: str = "", author: str = "", media_type: str = "", date_from: str = "", date_to: str = "", tag_id: int | None = Query(None, ge=1)):
         return {"total": store.count_posts(q, author, media_type, date_from, date_to, tag_id)}
+
+    @app.delete("/api/posts")
+    def delete_posts(payload: DeletePostsPayload):
+        return store.delete_posts(payload.post_ids)
 
     @app.get("/api/stats/overview")
     def overview_stats():

@@ -291,6 +291,25 @@ def test_zero_threshold_never_requests_stop(tmp_path):
     assert result["stop_requested"] is False
 
 
+def test_delete_posts_api_accepts_selected_ids_and_validates_bounds(tmp_path):
+    client = TestClient(create_app(Settings(archive_root=tmp_path)))
+    client.post("/api/ingest/x-response", json=x_payload("1", "2"))
+
+    response = client.request(
+        "DELETE", "/api/posts", json={"post_ids": ["1", "missing"]}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["deleted"] == ["1"]
+    assert response.json()["not_found"] == ["missing"]
+    assert client.get("/api/posts/1").status_code == 404
+    assert client.get("/api/posts/2").status_code == 200
+    assert client.request("DELETE", "/api/posts", json={"post_ids": []}).status_code == 422
+    assert client.request(
+        "DELETE", "/api/posts", json={"post_ids": [str(i) for i in range(201)]}
+    ).status_code == 422
+
+
 def test_extension_can_announce_start(tmp_path):
     client = TestClient(create_app(Settings(archive_root=tmp_path)))
 

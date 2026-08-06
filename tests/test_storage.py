@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from pathlib import Path
 import pytest
 from local_favorites_archive.models import MediaItem, Post, PostLink
 from local_favorites_archive.storage import ArchiveStore
@@ -207,3 +208,60 @@ def test_list_media_failures_joins_post_context(tmp_path):
         "source_url": "https://pbs.twimg.com/media/a.jpg?name=orig",
         "error": "timeout",
     }]
+
+
+def test_delete_posts_removes_records_search_rows_and_owned_files(tmp_path):
+    store = ArchiveStore(tmp_path)
+    links = [PostLink(0, "example.com", "https://example.com", "https://t.co/link")]
+    store.upsert_post(sample_post(post_id="1", text="delete searchable", links=links))
+    store.upsert_post(sample_post(post_id="2", text="keep searchable"))
+    tag = store.create_tag("selected", "#2563eb")
+    store.assign_tag("1", tag["id"])
+    media_path = store.root / store.get_post("1")["media"][0]["local_path"]
+    media_path.parent.mkdir(parents=True, exist_ok=True)
+    media_path.write_bytes(b"saved-media")
+
+    result = store.delete_posts(["1", "missing"])
+
+    assert result["deleted"] == ["1"]
+    assert result["not_found"] == ["missing"]
+    assert result["file_cleanup_errors"] == []
+    assert store.get_post("1") is None
+    assert store.get_post("2") is not None
+    assert store.list_posts(query="delete") == []
+    assert not (tmp_path / "raw" / "1.json").exists()
+    assert not (tmp_path / "media" / "1").exists()
+    with store._connect() as db:
+        assert db.execute("SELECT COUNT(*) FROM media WHERE post_id='1'").fetchone()[0] == 0
+        assert db.execute("SELECT COUNT(*) FROM post_links WHERE post_id='1'").fetchone()[0] == 0
+        assert db.execute("SELECT COUNT(*) FROM post_tags WHERE post_id='1'").fetchone()[0] == 0
+
+
+def test_delete_posts_deduplicates_requested_ids(tmp_path):
+    store = ArchiveStore(tmp_path)
+    store.upsert_post(sample_post(post_id="1"))
+
+    result = store.delete_posts(["1", "1"])
+
+    assert result["deleted"] == ["1"]
+    assert result["not_found"] == []
+
+
+def test_delete_posts_reports_file_cleanup_errors_after_database_commit(tmp_path, monkeypatch):
+    store = ArchiveStore(tmp_path)
+    store.upsert_post(sample_post(post_id="1"))
+    original_unlink = Path.unlink
+
+    def fail_raw_cleanup(path, missing_ok=False):
+        if path.name == "1.json":
+            raise OSError("file is locked")
+        return original_unlink(path, missing_ok=missing_ok)
+
+    monkeypatch.setattr(Path, "unlink", fail_raw_cleanup)
+
+    result = store.delete_posts(["1"])
+
+    assert store.get_post("1") is None
+    assert result["deleted"] == ["1"]
+    assert result["file_cleanup_errors"][0]["post_id"] == "1"
+    assert "file is locked" in result["file_cleanup_errors"][0]["error"]
