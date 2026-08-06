@@ -1,6 +1,7 @@
 const LOCAL_API = "http://127.0.0.1:8765";
 let session = { running: false, tabId: null, discovered: 0, added: 0, batches: 0, message: "等待开始" };
 const pendingLikes = new Map();
+let finishPromise = null;
 
 const delay = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 
@@ -27,6 +28,9 @@ async function sendPayload(payload) {
     batches: session.batches + 1,
     message: `已发现 ${session.discovered + result.discovered} 条，新增 ${session.added + result.new} 条`
   });
+  if (result.stop_requested && session.running) {
+    await finish(`已连续读取 ${result.existing_streak} 条本地已有推文，正在下载媒体`);
+  }
 }
 
 chrome.debugger.onEvent.addListener(async (source, method, params) => {
@@ -58,7 +62,7 @@ chrome.debugger.onDetach.addListener(source => {
   if (source.tabId === session.tabId && session.running) saveState({ running: false, message: "Chrome 已停止调试当前标签页" });
 });
 
-async function finish(message) {
+async function finishOnce(message) {
   const tabId = session.tabId;
   pendingLikes.clear();
   await saveState({ running: false, tabId: null, message });
@@ -75,6 +79,13 @@ async function finish(message) {
     try { await chrome.debugger.detach({ tabId }); } catch (_) {}
   }
   try { await fetch(`${LOCAL_API}/api/ingest/finish`, { method: "POST" }); } catch (_) {}
+}
+
+async function finish(message) {
+  if (!finishPromise) {
+    finishPromise = finishOnce(message).finally(() => { finishPromise = null; });
+  }
+  return finishPromise;
 }
 
 async function installScrollDriver(tabId) {
@@ -127,6 +138,7 @@ async function start(tabId, url) {
     if (!result.result) throw new Error("无法从当前页面确定账号，请手动打开个人主页的 Likes 标签后重试");
     targetUrl = result.result;
   }
+  finishPromise = null;
   await chrome.debugger.attach({ tabId }, "1.3");
   await saveState({ running: true, tabId, discovered: 0, added: 0, batches: 0, message: "正在重新加载 Likes 页面" });
   await debugCommand("Network.enable");

@@ -15,3 +15,13 @@ def test_extension_waits_for_network_loading_before_reading_body():
     assert 'method === "Network.loadingFinished"' in source
     assert "pendingLikes.set" in source
     assert "pendingLikes.delete" in source
+
+
+def test_extension_finishes_when_server_requests_threshold_stop():
+    source = Path("extension/background.js").read_text(encoding="utf-8")
+
+    assert "result.stop_requested" in source
+    assert "async function finish" in source
+    assert "finishPromise" in source
+    assert "连续" in source
+    assert "result.existing_streak" in source
