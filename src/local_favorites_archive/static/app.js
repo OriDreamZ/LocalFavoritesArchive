@@ -189,6 +189,11 @@ async function loadOverview() {
   }
 }
 
+async function loadArchiveSettings() {
+  const settings = await api('/api/settings');
+  $('stop-after-existing').value = settings.stop_after_existing;
+}
+
 function renderPostTags(node, detail) {
   const assigned = detail.tags || [];
   const assignedIds = new Set(assigned.map(tag => tag.id));
@@ -322,6 +327,10 @@ function renderSyncState(state) {
   $('sync-media-total').textContent = formatNumber(total);
   $('sync-media-downloaded').textContent = formatNumber(state.media_downloaded);
   $('sync-media-pending').textContent = `${formatNumber(state.media_queued)} / ${formatNumber(state.media_failed)}`;
+  $('existing-streak').textContent = formatNumber(state.existing_streak || 0);
+  if (document.activeElement !== $('stop-after-existing')) {
+    $('stop-after-existing').value = state.stop_after_existing ?? $('stop-after-existing').value;
+  }
   $('nav-posts-count').textContent = formatNumber(state.posts_total);
   $('nav-failures-count').textContent = formatNumber(state.media_failed);
   $('status').textContent = state.message || ({
@@ -331,6 +340,9 @@ function renderSyncState(state) {
     finished: `同步完成：下载 ${formatNumber(state.media_downloaded)}，失败 ${formatNumber(state.media_failed)}`,
     error: `同步失败：${state.error || ''}`,
   })[state.state] || syncStateLabel(state.state);
+  if (state.stop_requested) {
+    $('status').textContent = `已达到连续已有推文停止条件（${formatNumber(state.existing_streak)} 条），正在完成媒体下载`;
+  }
   renderOverviewSync(state);
 }
 
@@ -452,7 +464,7 @@ for (const input of [$('from'), $('to')]) {
 }
 $('page-size').addEventListener('change', () => { currentPage = 1; load(); });
 document.querySelectorAll('.pagination').forEach(setupPagination);
-$('refresh').addEventListener('click', async () => { await Promise.all([loadTags(), load(), loadOverview(), loadSyncFailures()]); poll(); });
+$('refresh').addEventListener('click', async () => { await Promise.all([loadTags(), load(), loadOverview(), loadSyncFailures(), loadArchiveSettings()]); poll(); });
 $('select-page').addEventListener('change', event => {
   document.querySelectorAll('.post').forEach(card => {
     const checkbox = card.querySelector('.post-select');
@@ -488,6 +500,27 @@ $('delete-selected').addEventListener('click', async () => {
 window.addEventListener('hashchange', () => activateWorkspace({focus: true}));
 window.addEventListener('scroll', () => $('back-to-top').classList.toggle('is-visible', window.scrollY > 480), {passive: true});
 $('back-to-top').addEventListener('click', () => window.scrollTo({top: 0, behavior: 'smooth'}));
+
+$('sync-settings-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const value = Number($('stop-after-existing').value);
+  if (!Number.isInteger(value) || value < 0 || value > 100000) {
+    $('sync-settings-message').textContent = '请输入 0 至 100000 之间的整数';
+    return;
+  }
+  try {
+    const settings = await api('/api/settings', {
+      method: 'PATCH',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({stop_after_existing: value}),
+    });
+    $('stop-after-existing').value = settings.stop_after_existing;
+    $('sync-settings-message').textContent = '设置已保存';
+    await poll();
+  } catch (error) {
+    $('sync-settings-message').textContent = `保存失败：${error.message}`;
+  }
+});
 
 $('tag-form').addEventListener('submit', async event => {
   event.preventDefault();
@@ -610,7 +643,7 @@ document.addEventListener('keydown', event => {
   activateWorkspace();
   try {
     await loadTags();
-    await Promise.all([load(), loadOverview(), loadSyncFailures()]);
+    await Promise.all([load(), loadOverview(), loadSyncFailures(), loadArchiveSettings()]);
   } catch (error) {
     $('status').textContent = `初始化失败：${error.message}`;
   }

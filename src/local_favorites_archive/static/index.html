@@ -126,6 +126,13 @@
         <div><span>已下载</span><strong id="sync-media-downloaded" class="numeric">0</strong></div>
         <div><span>排队 / 失败</span><strong id="sync-media-pending" class="numeric">0 / 0</strong></div>
       </section>
+      <form id="sync-settings-form" class="sync-settings-form">
+        <label for="stop-after-existing">连续已有推文停止数</label>
+        <input id="stop-after-existing" type="number" min="0" max="100000" step="1" value="50" inputmode="numeric">
+        <button id="save-sync-settings" type="submit">保存</button>
+        <span>当前连续已有 <strong id="existing-streak" class="numeric">0</strong> 条</span>
+        <span id="sync-settings-message" role="status"></span>
+      </form>
       <section class="progress-area" aria-label="归档进度">
         <div class="progress-row"><div class="progress-heading"><span>Likes 同步</span><span id="sync-progress-label">等待状态</span></div><progress id="sync-progress" max="100" value="0"></progress></div>
         <div class="progress-row"><div class="progress-heading"><span>媒体下载</span><span id="media-progress-label">0 / 0</span></div><progress id="media-progress" max="100" value="0"></progress></div>

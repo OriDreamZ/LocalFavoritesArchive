@@ -168,6 +168,11 @@ input:hover, select:hover { border-color: #aebcb4; }
 .sync-count-grid > div + div { border-left: 1px solid var(--line); }
 .sync-count-grid span { color: var(--muted); font-size: 11px; }
 .sync-count-grid strong { font-family: Consolas, "Cascadia Mono", monospace; font-size: 24px; }
+.sync-settings-form { display: grid; grid-template-columns: auto 120px auto auto minmax(120px, 1fr); gap: 10px; align-items: center; margin: 14px 0; color: var(--muted); font-size: 12px; }
+.sync-settings-form input { width: 120px; }
+.sync-settings-form button { min-height: 42px; }
+.sync-settings-form strong { color: var(--ink); }
+#sync-settings-message { min-width: 0; overflow-wrap: anywhere; }
 .progress-area { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 32px; margin: 14px 0; padding: 20px; border: 1px solid var(--line); border-radius: 7px; background: var(--paper); }
 .progress-heading { display: flex; justify-content: space-between; gap: 14px; margin-bottom: 8px; font-size: 12px; }
 .progress-heading span:last-child { color: var(--muted); text-align: right; }
@@ -256,6 +261,8 @@ dialog::backdrop { background: rgba(18, 28, 33, .48); }
   .sync-count-grid > div:nth-child(even) { border-left: 1px solid var(--line); }
   .sync-count-grid > div:nth-child(n+3) { border-top: 1px solid var(--line); }
   .progress-area { grid-template-columns: 1fr; }
+  .sync-settings-form { grid-template-columns: 1fr; align-items: stretch; }
+  .sync-settings-form input { width: 100%; }
   .archive-location { grid-column: 1; display: block; }
   .archive-location code { display: block; margin-top: 5px; }
   .failure-row { grid-template-columns: minmax(0, 1fr) auto; }

@@ -328,6 +328,24 @@ def test_favorites_supports_selected_post_deletion(tmp_path):
     assert "post_ids" in script
 
 
+def test_sync_center_edits_and_displays_existing_post_limit(tmp_path):
+    client = TestClient(create_app(Settings(archive_root=tmp_path)))
+    html = client.get("/").text
+    script = client.get("/assets/app.js").text
+
+    for element_id in (
+        "stop-after-existing", "save-sync-settings", "sync-settings-message",
+        "existing-streak",
+    ):
+        assert f'id="{element_id}"' in html
+    assert "async function loadArchiveSettings" in script
+    assert "'/api/settings'" in script
+    assert "stop_after_existing" in script
+    assert "existing_streak" in script
+    assert "stop_requested" in script
+    assert "已达到连续已有推文停止条件" in script
+
+
 def test_extension_can_announce_start(tmp_path):
     client = TestClient(create_app(Settings(archive_root=tmp_path)))
 
