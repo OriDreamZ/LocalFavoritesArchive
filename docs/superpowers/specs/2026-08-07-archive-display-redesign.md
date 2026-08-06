@@ -7,7 +7,7 @@ Redesign the local archive display page around the supplied editorial knowledge-
 ## Visual Direction
 
 - Use a quiet pale-green desktop sidebar and a white main canvas.
-- Brand the product as `喜欢归档` with the supporting label `LOCAL FAVORITES`.
+- Brand the product as `存下你的喜爱` with the supporting label `LOCAL FAVORITES`.
 - Use the main heading `喜欢过的内容，值得被找回。`
 - Use the supporting copy `把 X 上稍纵即逝的喜欢，沉淀为可搜索、可筛选、可长期保存的本地内容库。`
 - Keep corners restrained at 6-8 px, borders light, shadows subtle, and green reserved for active navigation and primary actions.
