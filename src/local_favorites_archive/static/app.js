@@ -12,6 +12,7 @@ const WORKSPACES = {
 let currentPage = 1;
 let totalPages = 1;
 let allTags = [];
+const selectedPostIds = new Set();
 let pollTimer = null;
 let viewerItems = [];
 let viewerIndex = 0;
@@ -199,7 +200,24 @@ function renderPostTags(node, detail) {
   node.innerHTML = `<div class="tag-chips">${chips}</div>${assignment}`;
 }
 
+function updateSelectionControls() {
+  const cards = [...document.querySelectorAll('.post')];
+  const selectedOnPage = cards.filter(card => selectedPostIds.has(card.dataset.id));
+  $('selection-count').textContent = `已选 ${formatNumber(selectedPostIds.size)} 条`;
+  $('delete-selected').disabled = selectedPostIds.size === 0;
+  $('select-page').checked = cards.length > 0 && selectedOnPage.length === cards.length;
+  $('select-page').indeterminate = selectedOnPage.length > 0 && selectedOnPage.length < cards.length;
+}
+
+function clearPostSelection() {
+  selectedPostIds.clear();
+  $('select-page').checked = false;
+  $('select-page').indeterminate = false;
+  updateSelectionControls();
+}
+
 async function load() {
+  clearPostSelection();
   try {
     const filters = filterParams();
     const {total} = await api('/api/posts/count?' + filters);
@@ -218,7 +236,10 @@ async function load() {
     $('posts').innerHTML = posts.length ? posts.map(post => `
       <article class="post" data-id="${esc(post.post_id)}">
         <div class="post-head">
-          <div><span class="author">${esc(post.author_name)}</span> <span class="handle">@${esc(post.author_handle)}</span></div>
+          <div class="post-heading-main">
+            <label class="post-select-control"><input class="post-select" type="checkbox" aria-label="选择 ${esc(post.author_name || post.author_handle)} 的推文 ${esc(post.post_id)}"></label>
+            <div><span class="author">${esc(post.author_name)}</span> <span class="handle">@${esc(post.author_handle)}</span></div>
+          </div>
           <span class="date">${post.published_at ? new Date(post.published_at).toLocaleString('zh-CN') : ''}</span>
         </div>
         <div class="text">${esc(post.text)}</div>
@@ -240,6 +261,7 @@ async function load() {
       }).join('');
       renderPostTags(article.querySelector('.post-tags'), detail);
     }));
+    updateSelectionControls();
   } catch (error) {
     $('posts').innerHTML = `<div class="empty">读取归档失败：${esc(error.message)}</div>`;
   }
@@ -431,6 +453,38 @@ for (const input of [$('from'), $('to')]) {
 $('page-size').addEventListener('change', () => { currentPage = 1; load(); });
 document.querySelectorAll('.pagination').forEach(setupPagination);
 $('refresh').addEventListener('click', async () => { await Promise.all([loadTags(), load(), loadOverview(), loadSyncFailures()]); poll(); });
+$('select-page').addEventListener('change', event => {
+  document.querySelectorAll('.post').forEach(card => {
+    const checkbox = card.querySelector('.post-select');
+    checkbox.checked = event.currentTarget.checked;
+    if (checkbox.checked) selectedPostIds.add(card.dataset.id);
+    else selectedPostIds.delete(card.dataset.id);
+  });
+  updateSelectionControls();
+});
+$('delete-selected').addEventListener('click', async () => {
+  const postIds = [...selectedPostIds];
+  if (!postIds.length) return;
+  const confirmed = window.confirm(
+    `永久删除所选 ${postIds.length} 条推文？正文、原始 JSON、标签、图片和视频都将删除，且无法撤销。`
+  );
+  if (!confirmed) return;
+  try {
+    const result = await api('/api/posts', {
+      method: 'DELETE',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({post_ids: postIds}),
+    });
+    clearPostSelection();
+    $('delete-message').textContent = result.file_cleanup_errors.length
+      ? `已删除 ${result.deleted.length} 条，但有 ${result.file_cleanup_errors.length} 项文件清理失败`
+      : `已删除 ${result.deleted.length} 条`;
+    await Promise.all([loadTags(), load(), loadOverview(), loadSyncFailures()]);
+    poll();
+  } catch (error) {
+    $('delete-message').textContent = `删除失败：${error.message}`;
+  }
+});
 window.addEventListener('hashchange', () => activateWorkspace({focus: true}));
 window.addEventListener('scroll', () => $('back-to-top').classList.toggle('is-visible', window.scrollY > 480), {passive: true});
 $('back-to-top').addEventListener('click', () => window.scrollTo({top: 0, behavior: 'smooth'}));
@@ -497,6 +551,15 @@ $('posts').addEventListener('click', async event => {
   } catch (error) {
     $('posts').insertAdjacentHTML('afterbegin', `<div class="empty">标签操作失败：${esc(error.message)}</div>`);
   }
+});
+
+$('posts').addEventListener('change', event => {
+  const checkbox = event.target.closest('.post-select');
+  if (!checkbox) return;
+  const postId = checkbox.closest('.post').dataset.id;
+  if (checkbox.checked) selectedPostIds.add(postId);
+  else selectedPostIds.delete(postId);
+  updateSelectionControls();
 });
 
 $('viewer-close').addEventListener('click', () => $('image-viewer').close());

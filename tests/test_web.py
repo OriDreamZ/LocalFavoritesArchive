@@ -310,6 +310,24 @@ def test_delete_posts_api_accepts_selected_ids_and_validates_bounds(tmp_path):
     ).status_code == 422
 
 
+def test_favorites_supports_selected_post_deletion(tmp_path):
+    client = TestClient(create_app(Settings(archive_root=tmp_path)))
+    html = client.get("/").text
+    script = client.get("/assets/app.js").text
+
+    for element_id in (
+        "select-page", "selection-count", "delete-selected", "delete-message"
+    ):
+        assert f'id="{element_id}"' in html
+    assert "selectedPostIds" in script
+    assert 'class="post-select"' in script
+    assert "function updateSelectionControls" in script
+    assert "function clearPostSelection" in script
+    assert "永久删除所选" in script
+    assert "method: 'DELETE'" in script
+    assert "post_ids" in script
+
+
 def test_extension_can_announce_start(tmp_path):
     client = TestClient(create_app(Settings(archive_root=tmp_path)))
 

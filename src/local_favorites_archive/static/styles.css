@@ -119,11 +119,21 @@ input:hover, select:hover { border-color: #aebcb4; }
 .collection-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 16px; }
 .collection-heading h2 { margin: 0; font-size: 20px; }
 .collection-heading h2 span { margin-left: 5px; color: var(--muted); font-size: 12px; font-weight: 400; }
+.collection-controls, .collection-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.collection-controls { justify-content: flex-end; }
+.collection-actions { color: var(--muted); font-size: 12px; }
+.select-page-control, .post-select-control { display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.select-page-control { min-height: 40px; gap: 7px; }
+.select-page-control input, .post-select { width: 18px; min-height: 18px; padding: 0; accent-color: var(--green); }
+.collection-actions button { min-height: 38px; }
+.delete-message { min-height: 20px; margin: -8px 0 8px; color: var(--danger); font-size: 12px; }
 .page-size-control { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12px; }
 .page-size-control select { width: auto; min-height: 36px; padding: 7px 28px 7px 9px; }
 #posts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
 .post { min-width: 0; padding: 18px; border: 1px solid var(--line); border-radius: 7px; background: var(--paper); }
 .post-head { display: flex; justify-content: space-between; gap: 14px; }
+.post-heading-main { display: flex; min-width: 0; align-items: flex-start; gap: 8px; }
+.post-select-control { width: 32px; min-width: 32px; min-height: 32px; margin: -7px 0 0 -7px; }
 .author { font-weight: 700; }
 .handle, .date, .muted { color: var(--muted); font-size: 12px; }
 .date { flex: none; text-align: right; }
@@ -258,6 +268,9 @@ dialog::backdrop { background: rgba(18, 28, 33, .48); }
   #filters { grid-template-columns: 1fr; }
   #filters .search-field { grid-column: 1; }
   .collection-heading { align-items: flex-start; flex-direction: column; }
+  .collection-controls { width: 100%; align-items: stretch; justify-content: flex-start; }
+  .collection-actions { width: 100%; }
+  .collection-actions #delete-selected { width: 100%; }
   .post { padding: 15px; }
   .post-head { display: block; }
   .date { display: block; margin-top: 5px; text-align: left; }

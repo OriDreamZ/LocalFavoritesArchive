@@ -83,8 +83,16 @@
       <section id="collection" class="collection-section" aria-labelledby="collection-title">
         <div class="collection-heading">
           <h2 id="collection-title">收藏内容 <span id="summary">0 条结果</span></h2>
-          <label class="page-size-control">每页<select id="page-size"><option value="20">20 条</option><option value="50">50 条</option><option value="100">100 条</option></select></label>
+          <div class="collection-controls">
+            <div class="collection-actions">
+              <label class="select-page-control"><input id="select-page" type="checkbox">全选当前页</label>
+              <span id="selection-count" class="numeric">已选 0 条</span>
+              <button id="delete-selected" class="danger" type="button" disabled>删除所选</button>
+            </div>
+            <label class="page-size-control">每页<select id="page-size"><option value="20">20 条</option><option value="50">50 条</option><option value="100">100 条</option></select></label>
+          </div>
         </div>
+        <div id="delete-message" class="delete-message" role="status"></div>
         <nav class="pagination pagination-top" aria-label="顶部推文分页">
           <div class="page-nav">
             <button class="secondary page-button" data-page-action="prev" type="button" aria-label="上一页" title="上一页">‹</button>
