@@ -93,8 +93,14 @@ def test_extension_can_announce_start(tmp_path):
 
 def test_status_reports_archive_path_and_persistent_counts(tmp_path):
     settings = Settings(archive_root=tmp_path)
-    result = {"rest_id": "99", "core": {"user_results": {"result": {"rest_id": "7", "core": {"screen_name": "alice", "name": "Alice"}}}}, "legacy": {"full_text": "persistent", "created_at": "Tue Jan 02 03:04:05 +0000 2024"}}
-    payload = {"data": {"entries": [{"entryId": "tweet-99", "content": {"itemContent": {"tweet_results": {"result": result}}}}]}}
+    def result(post_id, author_id, handle, name):
+        return {"rest_id": post_id, "core": {"user_results": {"result": {"rest_id": author_id, "core": {"screen_name": handle, "name": name}}}}, "legacy": {"full_text": f"persistent {post_id}", "created_at": "Tue Jan 02 03:04:05 +0000 2024"}}
+
+    payload = {"data": {"entries": [
+        {"entryId": "tweet-99", "content": {"itemContent": {"tweet_results": {"result": result("99", "7", "alice", "Alice")}}}},
+        {"entryId": "tweet-100", "content": {"itemContent": {"tweet_results": {"result": result("100", "7", "alice", "Alice")}}}},
+        {"entryId": "tweet-101", "content": {"itemContent": {"tweet_results": {"result": result("101", "8", "bob", "Bob")}}}},
+    ]}}
     first_client = TestClient(create_app(settings))
     first_client.post("/api/ingest/x-response", json=payload)
 
@@ -102,9 +108,10 @@ def test_status_reports_archive_path_and_persistent_counts(tmp_path):
     status = restarted_client.get("/api/sync/status").json()
 
     assert status["archive_path"] == str(tmp_path.resolve())
-    assert status["posts_total"] == 1
+    assert status["posts_total"] == 3
+    assert status["authors_total"] == 2
     assert status["media_total"] == 0
-    assert restarted_client.get("/api/posts").json()[0]["text"] == "persistent"
+    assert restarted_client.get("/api/posts").json()[0]["text"].startswith("persistent")
 
 
 def test_ingest_schedules_progressive_media_download(tmp_path, monkeypatch):

@@ -149,6 +149,9 @@ def create_app(settings: Settings) -> FastAPI:
     def sync_status():
         with store._connect() as db:
             posts_total = db.execute("SELECT COUNT(*) FROM posts").fetchone()[0]
+            authors_total = db.execute(
+                "SELECT COUNT(DISTINCT author_handle) FROM posts WHERE author_handle <> ''"
+            ).fetchone()[0]
             media_total = db.execute("SELECT COUNT(*) FROM media").fetchone()[0]
             media_downloaded = db.execute("SELECT COUNT(*) FROM media WHERE status='downloaded'").fetchone()[0]
             media_queued = db.execute("SELECT COUNT(*) FROM media WHERE status='queued'").fetchone()[0]
@@ -157,6 +160,7 @@ def create_app(settings: Settings) -> FastAPI:
             **state,
             "archive_path": str(settings.archive_root.resolve()),
             "posts_total": posts_total,
+            "authors_total": authors_total,
             "media_total": media_total,
             "media_downloaded": media_downloaded,
             "media_queued": media_queued,
