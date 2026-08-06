@@ -100,6 +100,35 @@ function safeColor(color) {
   return /^#[0-9a-f]{6}$/i.test(color) ? color : '#64748b';
 }
 
+function safeHttpUrl(value) {
+  try {
+    const url = new URL(String(value));
+    return ['http:', 'https:'].includes(url.protocol) ? url.href : '';
+  } catch {
+    return '';
+  }
+}
+
+function renderPostText(node, text, links) {
+  const source = String(text ?? '');
+  const parts = [];
+  let cursor = 0;
+  for (const link of links || []) {
+    const label = String(link.display_url ?? '');
+    if (!label) continue;
+    const index = source.indexOf(label, cursor);
+    if (index < 0) continue;
+    parts.push(esc(source.slice(cursor, index)));
+    const destination = safeHttpUrl(link.expanded_url);
+    parts.push(destination
+      ? `<a class="post-link" href="${esc(destination)}" target="_blank" rel="noreferrer">${esc(label)}</a>`
+      : esc(label));
+    cursor = index + label.length;
+  }
+  parts.push(esc(source.slice(cursor)));
+  node.innerHTML = parts.join('');
+}
+
 function syncStateLabel(state) {
   return ({
     idle: '等待同步',
@@ -200,6 +229,7 @@ async function load() {
 
     await Promise.all([...document.querySelectorAll('.post')].map(async article => {
       const detail = await api('/api/posts/' + encodeURIComponent(article.dataset.id));
+      renderPostText(article.querySelector('.text'), detail.text, detail.links || []);
       const mediaNode = article.querySelector('.media');
       mediaNode.innerHTML = detail.media.filter(item => item.status === 'downloaded').map(item => {
         const filename = item.local_path.split(/[\\/]/).pop();

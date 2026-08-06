@@ -164,6 +164,17 @@ def test_ui_script_renders_sync_failures_and_back_to_top(tmp_path):
     assert "formatNumber(failures.length)" not in script
 
 
+def test_ui_renders_structured_post_links_safely(tmp_path):
+    script = TestClient(create_app(Settings(archive_root=tmp_path))).get("/assets/app.js").text
+
+    assert "function renderPostText" in script
+    assert "function safeHttpUrl" in script
+    assert 'class="post-link"' in script
+    assert 'target="_blank"' in script
+    assert 'rel="noreferrer"' in script
+    assert "detail.links" in script
+
+
 def test_favorites_has_synchronized_top_and_bottom_pagination(tmp_path):
     client = TestClient(create_app(Settings(archive_root=tmp_path)))
     html = client.get("/").text

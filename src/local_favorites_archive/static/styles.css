@@ -128,6 +128,8 @@ input:hover, select:hover { border-color: #aebcb4; }
 .handle, .date, .muted { color: var(--muted); font-size: 12px; }
 .date { flex: none; text-align: right; }
 .text { margin: 15px 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; line-height: 1.65; }
+.post-link { color: var(--green); overflow-wrap: anywhere; word-break: break-word; text-decoration: none; }
+.post-link:hover, .post-link:focus-visible { text-decoration: underline; }
 .post-tags { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 13px; }
 .tag-chips { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .tag-chip { display: inline-flex; min-height: 30px; align-items: center; gap: 6px; padding: 5px 8px; border: 1px solid color-mix(in srgb, var(--tag-color) 45%, #d6dde0); border-left: 4px solid var(--tag-color); border-radius: 5px; background: #f7f9f8; color: #25342d; font-size: 12px; font-weight: 600; }
