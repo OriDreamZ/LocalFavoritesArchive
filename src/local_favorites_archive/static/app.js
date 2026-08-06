@@ -56,6 +56,7 @@ function normalizeRoute(hash = window.location.hash) {
 
 function activateWorkspace({focus = false} = {}) {
   const route = normalizeRoute();
+  if (window.location.hash !== `#${route}`) history.replaceState(null, '', `#${route}`);
   document.querySelectorAll('[data-workspace]').forEach(section => {
     section.hidden = section.dataset.workspace !== route;
   });
@@ -247,7 +248,6 @@ async function loadSyncFailures() {
         <span class="failure-error">${esc(item.error || '未知错误')}</span>
         <a href="${esc(item.url)}" target="_blank" rel="noreferrer">查看原文 ↗</a>
       </div>`).join('') : '<div class="empty-state">当前没有媒体下载失败记录</div>';
-    $('nav-failures-count').textContent = formatNumber(failures.length);
   } catch (error) {
     $('sync-failures').innerHTML = `<div class="empty-state">失败记录读取失败：${esc(error.message)}</div>`;
   }

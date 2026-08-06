@@ -138,6 +138,7 @@ def test_ui_script_routes_four_workspaces_and_renders_overview(tmp_path):
         "overview-distribution",
     ):
         assert token in script
+    assert "history.replaceState(null, '', `#${route}`)" in script
 
 
 def test_ui_script_uses_tag_workspace_instead_of_dialog(tmp_path):
@@ -160,6 +161,7 @@ def test_ui_script_renders_sync_failures_and_back_to_top(tmp_path):
     assert "back-to-top" in script
     assert "window.scrollY > 480" in script
     assert "window.scrollTo({top: 0, behavior: 'smooth'})" in script
+    assert "formatNumber(failures.length)" not in script
 
 
 def test_ingest_x_response_persists_liked_post(tmp_path):
