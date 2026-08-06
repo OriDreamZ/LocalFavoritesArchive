@@ -17,11 +17,12 @@ def main() -> None:
     args = parser.parse_args()
     settings = Settings(archive_root=args.archive, port=args.port)
     settings.ensure_dirs()
-    store = ArchiveStore(settings.archive_root)
     if args.command == "init":
+        ArchiveStore(settings.archive_root)
         print(f"归档目录已初始化：{settings.archive_root.resolve()}")
     elif args.command == "retry-media":
         import asyncio
+        store = ArchiveStore(settings.archive_root)
         print(asyncio.run(MediaDownloader(store, settings.max_media_concurrency).run()))
     else:
         uvicorn.run(create_app(settings), host=settings.host, port=settings.port)
