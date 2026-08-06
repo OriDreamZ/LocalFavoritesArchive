@@ -267,15 +267,18 @@ def test_existing_streak_crosses_batches_resets_on_new_and_latches_stop(tmp_path
     second = client.post("/api/ingest/x-response", json=x_payload("2")).json()
     assert second["existing_streak"] == 2
     assert second["stop_requested"] is True
+    assert second["stop_trigger_streak"] == 2
 
     latched = client.post("/api/ingest/x-response", json=x_payload("3")).json()
     assert latched["existing_streak"] == 0
     assert latched["stop_requested"] is True
+    assert latched["stop_trigger_streak"] == 2
 
     client.post("/api/ingest/start")
     status = client.get("/api/sync/status").json()
     assert status["existing_streak"] == 0
     assert status["stop_requested"] is False
+    assert status["stop_trigger_streak"] == 0
 
 
 def test_zero_threshold_never_requests_stop(tmp_path):

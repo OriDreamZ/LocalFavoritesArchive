@@ -50,6 +50,7 @@ def create_app(settings: Settings) -> FastAPI:
     state: dict[str, Any] = {
         "state": "idle",
         "existing_streak": 0,
+        "stop_trigger_streak": 0,
         "stop_after_existing": store.get_stop_after_existing(),
         "stop_requested": False,
     }
@@ -169,14 +170,18 @@ def create_app(settings: Settings) -> FastAPI:
             else:
                 existing_streak += 1
         threshold = store.get_stop_after_existing()
-        stop_requested = state.get("stop_requested", False) or (
-            threshold > 0 and existing_streak >= threshold
-        )
+        was_stopped = state.get("stop_requested", False)
+        stop_reached = threshold > 0 and existing_streak >= threshold
+        stop_requested = was_stopped or stop_reached
+        stop_trigger_streak = state.get("stop_trigger_streak", 0)
+        if stop_reached and not was_stopped:
+            stop_trigger_streak = existing_streak
         state.update({
             "state": "collecting",
             "discovered": state.get("discovered", 0) + len(posts),
             "new": state.get("new", 0) + added,
             "existing_streak": existing_streak,
+            "stop_trigger_streak": stop_trigger_streak,
             "stop_after_existing": threshold,
             "stop_requested": stop_requested,
             "message": "正在从已登录的 Chrome 接收 Likes",
@@ -186,6 +191,7 @@ def create_app(settings: Settings) -> FastAPI:
             "discovered": len(posts),
             "new": added,
             "existing_streak": existing_streak,
+            "stop_trigger_streak": stop_trigger_streak,
             "stop_after_existing": threshold,
             "stop_requested": stop_requested,
         }
@@ -195,6 +201,7 @@ def create_app(settings: Settings) -> FastAPI:
         state.clear()
         state.update({
             "existing_streak": 0,
+            "stop_trigger_streak": 0,
             "stop_after_existing": store.get_stop_after_existing(),
             "stop_requested": False,
         })

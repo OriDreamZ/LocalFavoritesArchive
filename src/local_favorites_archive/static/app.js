@@ -341,7 +341,7 @@ function renderSyncState(state) {
     error: `同步失败：${state.error || ''}`,
   })[state.state] || syncStateLabel(state.state);
   if (state.stop_requested) {
-    $('status').textContent = `已达到连续已有推文停止条件（${formatNumber(state.existing_streak)} 条），正在完成媒体下载`;
+    $('status').textContent = `已达到连续已有推文停止条件（${formatNumber(state.stop_trigger_streak || state.existing_streak)} 条），正在完成媒体下载`;
   }
   renderOverviewSync(state);
 }
