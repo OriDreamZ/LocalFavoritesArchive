@@ -80,6 +80,15 @@ def test_image_viewer_serves_explicit_fit_logic(tmp_path):
     assert "translate(calc(-50%" in script
 
 
+def test_ui_script_binds_real_summary_statistics(tmp_path):
+    script = TestClient(create_app(Settings(archive_root=tmp_path))).get("/assets/app.js").text
+
+    assert "hero-posts-total" in script
+    assert "hero-authors-total" in script
+    assert "hero-sync-state" in script
+    assert "syncStateLabel" in script
+
+
 def test_ingest_x_response_persists_liked_post(tmp_path):
     client = TestClient(create_app(Settings(archive_root=tmp_path)))
     result = {

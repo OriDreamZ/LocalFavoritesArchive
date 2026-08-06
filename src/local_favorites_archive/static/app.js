@@ -205,9 +205,23 @@ function jumpToPage() {
   window.scrollTo({top: 0, behavior: 'smooth'});
 }
 
+function syncStateLabel(state) {
+  return ({
+    idle: '等待同步',
+    starting: '正在连接',
+    collecting: '正在采集',
+    downloading: '正在下载媒体',
+    finished: '同步完成',
+    error: '同步失败',
+  })[state] || '状态未知';
+}
+
 async function poll() {
   try {
     const state = await api('/api/sync/status');
+    $('hero-posts-total').textContent = state.posts_total || 0;
+    $('hero-authors-total').textContent = state.authors_total || 0;
+    $('hero-sync-state').textContent = syncStateLabel(state.state);
     const active = ['starting', 'collecting'].includes(state.state);
     const sync = $('sync-progress');
     if (active) sync.removeAttribute('value'); else sync.value = state.state === 'finished' ? 100 : 0;
