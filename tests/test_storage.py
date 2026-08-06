@@ -4,10 +4,11 @@ from local_favorites_archive.models import MediaItem, Post
 from local_favorites_archive.storage import ArchiveStore
 
 
-def sample_post(text="hello archive", post_id="42", handle="a", published_at=None, with_media=True):
+def sample_post(text="hello archive", post_id="42", handle="a", published_at=None, collected_at=None, with_media=True):
     published_at = published_at or datetime(2024, 1, 2, tzinfo=timezone.utc)
+    collected_at = collected_at or datetime.now(timezone.utc)
     media = [MediaItem(0, "image", "https://pbs.twimg.com/media/a.jpg?name=orig")] if with_media else []
-    return Post(post_id, f"https://x.com/{handle}/status/{post_id}", text, "1", handle, handle.title(), published_at, datetime.now(timezone.utc), raw={"id": post_id}, media=media)
+    return Post(post_id, f"https://x.com/{handle}/status/{post_id}", text, "1", handle, handle.title(), published_at, collected_at, raw={"id": post_id}, media=media)
 
 
 def test_upsert_is_idempotent_and_searchable(tmp_path):
@@ -94,3 +95,55 @@ def test_tag_names_are_unique_case_insensitively(tmp_path):
 
     with pytest.raises(ValueError, match="already exists"):
         store.create_tag("read later", "#16a34a")
+
+
+def test_overview_stats_reports_archive_aggregates(tmp_path):
+    store = ArchiveStore(tmp_path)
+    store.upsert_post(sample_post(
+        post_id="1",
+        handle="alice",
+        published_at=datetime(2024, 1, 1, tzinfo=timezone.utc),
+        collected_at=datetime(2024, 1, 10, tzinfo=timezone.utc),
+    ))
+    store.upsert_post(sample_post(
+        post_id="2",
+        handle="bob",
+        published_at=datetime(2024, 1, 3, tzinfo=timezone.utc),
+        collected_at=datetime(2024, 2, 10, tzinfo=timezone.utc),
+        with_media=False,
+    ))
+    tag = store.create_tag("待读", "#2563eb")
+    store.assign_tag("1", tag["id"])
+    with store._connect() as db:
+        db.execute("UPDATE media SET status='downloaded', byte_size=2048 WHERE post_id='1'")
+
+    stats = store.overview_stats(now=datetime(2024, 2, 15, tzinfo=timezone.utc))
+
+    assert stats["posts_total"] == 2
+    assert stats["authors_total"] == 2
+    assert stats["tagged_posts"] == 1
+    assert stats["tag_coverage_percent"] == 50.0
+    assert stats["media_total"] == 1
+    assert stats["media_downloaded"] == 1
+    assert stats["media_failed"] == 0
+    assert stats["media_completion_percent"] == 100.0
+    assert stats["image_posts"] == 1
+    assert stats["video_posts"] == 0
+    assert stats["text_posts"] == 1
+    assert stats["archive_days"] == 3
+    assert stats["storage_bytes"] == 2048
+    assert len(stats["monthly_additions"]) == 12
+    assert stats["monthly_additions"][-2:] == [
+        {"month": "2024-01", "count": 1},
+        {"month": "2024-02", "count": 1},
+    ]
+
+
+def test_overview_stats_handles_empty_media_and_zero_months(tmp_path):
+    stats = ArchiveStore(tmp_path).overview_stats(now=datetime(2024, 2, 15, tzinfo=timezone.utc))
+
+    assert stats["media_completion_percent"] == 0.0
+    assert stats["tag_coverage_percent"] == 0.0
+    assert stats["archive_days"] == 0
+    assert stats["storage_bytes"] == 0
+    assert [item["count"] for item in stats["monthly_additions"]] == [0] * 12

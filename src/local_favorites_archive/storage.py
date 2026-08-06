@@ -1,6 +1,7 @@
 import hashlib
 import json
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from .models import Post
@@ -135,6 +136,78 @@ class ArchiveStore:
                 (post_id,),
             ).fetchall()]
             return data
+
+    def overview_stats(self, now: datetime | None = None) -> dict[str, Any]:
+        now = now or datetime.now(timezone.utc)
+        anchor = now.astimezone(timezone.utc)
+        anchor_index = anchor.year * 12 + anchor.month - 1
+        months = []
+        for offset in range(11, -1, -1):
+            year, month_index = divmod(anchor_index - offset, 12)
+            months.append(f"{year:04d}-{month_index + 1:02d}")
+
+        with self._connect() as db:
+            posts_total = db.execute("SELECT COUNT(*) FROM posts").fetchone()[0]
+            authors_total = db.execute(
+                "SELECT COUNT(DISTINCT author_handle) FROM posts WHERE COALESCE(author_handle, '') <> ''"
+            ).fetchone()[0]
+            tagged_posts = db.execute("SELECT COUNT(DISTINCT post_id) FROM post_tags").fetchone()[0]
+            media_row = db.execute("""
+                SELECT COUNT(*) AS total,
+                       SUM(CASE WHEN status='downloaded' THEN 1 ELSE 0 END) AS downloaded,
+                       SUM(CASE WHEN status='failed' THEN 1 ELSE 0 END) AS failed,
+                       COALESCE(SUM(byte_size), 0) AS storage_bytes
+                FROM media
+            """).fetchone()
+            image_posts = db.execute(
+                "SELECT COUNT(DISTINCT post_id) FROM media WHERE kind='image' AND status='downloaded'"
+            ).fetchone()[0]
+            video_posts = db.execute(
+                "SELECT COUNT(DISTINCT post_id) FROM media WHERE kind='video' AND status='downloaded'"
+            ).fetchone()[0]
+            text_posts = db.execute(
+                "SELECT COUNT(*) FROM posts p WHERE NOT EXISTS (SELECT 1 FROM media m WHERE m.post_id=p.post_id)"
+            ).fetchone()[0]
+            coverage = db.execute(
+                "SELECT MIN(published_at) AS first_date, MAX(published_at) AS last_date FROM posts WHERE published_at IS NOT NULL"
+            ).fetchone()
+            monthly_counts = {
+                row["month"]: row["count"]
+                for row in db.execute(
+                    """SELECT substr(collected_at, 1, 7) AS month, COUNT(*) AS count
+                       FROM posts
+                       WHERE substr(collected_at, 1, 7) BETWEEN ? AND ?
+                       GROUP BY month""",
+                    (months[0], months[-1]),
+                ).fetchall()
+            }
+
+        media_total = media_row["total"]
+        media_downloaded = media_row["downloaded"] or 0
+        first_date = coverage["first_date"]
+        last_date = coverage["last_date"]
+        archive_days = 0
+        if first_date and last_date:
+            archive_days = (
+                datetime.fromisoformat(last_date).date() - datetime.fromisoformat(first_date).date()
+            ).days + 1
+
+        return {
+            "posts_total": posts_total,
+            "authors_total": authors_total,
+            "tagged_posts": tagged_posts,
+            "tag_coverage_percent": round(tagged_posts / posts_total * 100, 1) if posts_total else 0.0,
+            "media_total": media_total,
+            "media_downloaded": media_downloaded,
+            "media_failed": media_row["failed"] or 0,
+            "media_completion_percent": round(media_downloaded / media_total * 100, 1) if media_total else 0.0,
+            "image_posts": image_posts,
+            "video_posts": video_posts,
+            "text_posts": text_posts,
+            "archive_days": archive_days,
+            "storage_bytes": media_row["storage_bytes"],
+            "monthly_additions": [{"month": month, "count": monthly_counts.get(month, 0)} for month in months],
+        }
 
     def list_tags(self) -> list[dict[str, Any]]:
         with self._connect() as db:
