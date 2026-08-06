@@ -30,12 +30,16 @@ def test_local_api_and_ui(tmp_path):
 
 
 def test_date_filters_have_visible_distinct_labels(tmp_path):
-    html = TestClient(create_app(Settings(archive_root=tmp_path))).get("/").text
+    client = TestClient(create_app(Settings(archive_root=tmp_path)))
+    html = client.get("/").text
+    script = client.get("/assets/app.js").text
 
     assert '<span>起始日期</span>' in html
     assert 'id="from" type="date" aria-label="起始日期"' in html
     assert '<span>截至日期</span>' in html
     assert 'id="to" type="date" aria-label="截至日期"' in html
+    assert html.count('<span class="date-placeholder" aria-hidden="true">年/月/日</span>') == 2
+    assert "syncDateInputState" in script
 
 
 def test_ui_uses_approved_archive_library_shell(tmp_path):

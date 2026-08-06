@@ -190,8 +190,20 @@ input:hover, select:hover { border-color: #b4c6bc; }
   border-radius: 6px;
   background: var(--paper);
 }
-.filter-date > span { color: var(--muted); font-size: 10px; line-height: 1.1; }
+.filter-date > span:first-child { color: var(--muted); font-size: 10px; line-height: 1.1; }
+.date-control { position: relative; display: block; min-width: 0; }
 .filter-date input { min-height: 24px; padding: 2px 0 0; border: 0; border-radius: 0; background: transparent; }
+.date-placeholder {
+  position: absolute;
+  inset: 0 28px 0 0;
+  display: flex;
+  align-items: center;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 16px;
+  pointer-events: none;
+}
+.date-control.has-value .date-placeholder { display: none; }
 
 .sync-section { scroll-margin-top: 24px; padding: 28px 0 30px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .section-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 22px; }

@@ -42,8 +42,8 @@
       <label><span class="sr-only">作者</span><input id="author" placeholder="所有作者"></label>
       <label><span class="sr-only">媒体类型</span><select id="media"><option value="">所有媒体</option><option value="image">图片</option><option value="video">视频</option><option value="text">纯文本</option></select></label>
       <label><span class="sr-only">标签</span><select id="tag-filter" aria-label="标签筛选"><option value="">全部标签</option></select></label>
-      <label class="filter-date"><span>起始日期</span><input id="from" type="date" aria-label="起始日期"></label>
-      <label class="filter-date"><span>截至日期</span><input id="to" type="date" aria-label="截至日期"></label>
+      <label class="filter-date"><span>起始日期</span><span class="date-control"><input id="from" type="date" aria-label="起始日期"><span class="date-placeholder" aria-hidden="true">年/月/日</span></span></label>
+      <label class="filter-date"><span>截至日期</span><span class="date-control"><input id="to" type="date" aria-label="截至日期"><span class="date-placeholder" aria-hidden="true">年/月/日</span></span></label>
       <label><span class="sr-only">排序字段</span><select id="sort"><option value="published_at">发布时间</option><option value="collected_at">收藏时间</option><option value="author">作者名称</option></select></label>
       <label><span class="sr-only">排序方向</span><select id="direction" aria-label="排序方向"><option value="desc">降序</option><option value="asc">升序</option></select></label>
       <button type="submit">筛选</button>

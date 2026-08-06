@@ -35,6 +35,10 @@ function filterParams() {
   return params;
 }
 
+function syncDateInputState(input) {
+  input.closest('.date-control').classList.toggle('has-value', Boolean(input.value));
+}
+
 function updatePageControls(total) {
   $('page-info').textContent = `第 ${currentPage} / ${totalPages} 页 · 共 ${total} 条`;
   $('prev-page').disabled = currentPage <= 1;
@@ -240,6 +244,11 @@ async function poll() {
 }
 
 $('filters').addEventListener('submit', event => { event.preventDefault(); currentPage = 1; load(); });
+for (const input of [$('from'), $('to')]) {
+  syncDateInputState(input);
+  input.addEventListener('input', () => syncDateInputState(input));
+  input.addEventListener('change', () => syncDateInputState(input));
+}
 $('page-size').addEventListener('change', () => { currentPage = 1; load(); });
 $('prev-page').addEventListener('click', () => { if (currentPage > 1) { currentPage--; load(); window.scrollTo({top: 0, behavior: 'smooth'}); } });
 $('next-page').addEventListener('click', () => { if (currentPage < totalPages) { currentPage++; load(); window.scrollTo({top: 0, behavior: 'smooth'}); } });
