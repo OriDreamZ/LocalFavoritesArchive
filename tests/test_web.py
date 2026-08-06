@@ -1,0 +1,163 @@
+from fastapi.testclient import TestClient
+import time
+from local_favorites_archive.config import Settings
+from local_favorites_archive.web import create_app
+
+
+def test_local_api_and_ui(tmp_path):
+    client = TestClient(create_app(Settings(archive_root=tmp_path)))
+    assert client.get("/").status_code == 200
+    response = client.get("/api/posts")
+    assert response.status_code == 200
+    assert response.json() == []
+    assert client.get("/api/sync/status").json()["state"] == "idle"
+    assert 'id="direction"' in client.get("/").text
+    assert "Chrome 扩展" in client.get("/").text
+    assert 'id="sync-progress"' in client.get("/").text
+    assert 'id="media-progress"' in client.get("/").text
+    assert 'id="archive-path"' in client.get("/").text
+    assert 'id="page-size"' in client.get("/").text
+    assert 'id="prev-page"' in client.get("/").text
+    assert 'id="next-page"' in client.get("/").text
+    assert 'id="page-info"' in client.get("/").text
+    assert 'value="text"' in client.get("/").text
+    assert 'id="tag-filter"' in client.get("/").text
+    assert 'id="tag-manager-open"' in client.get("/").text
+    assert 'id="tag-dialog"' in client.get("/").text
+    assert 'id="page-number"' in client.get("/").text
+    assert 'id="jump-page"' in client.get("/").text
+    assert client.get("/api/posts/count").json() == {"total": 0}
+
+
+def test_date_filters_have_visible_distinct_labels(tmp_path):
+    html = TestClient(create_app(Settings(archive_root=tmp_path))).get("/").text
+
+    assert '<span>起始日期</span>' in html
+    assert 'id="from" type="date" aria-label="起始日期"' in html
+    assert '<span>截至日期</span>' in html
+    assert 'id="to" type="date" aria-label="截至日期"' in html
+
+
+def test_ui_has_local_image_viewer_controls(tmp_path):
+    html = TestClient(create_app(Settings(archive_root=tmp_path))).get("/").text
+
+    for element_id in (
+        "image-viewer",
+        "viewer-image",
+        "viewer-canvas",
+        "viewer-prev",
+        "viewer-next",
+        "viewer-zoom-out",
+        "viewer-zoom-in",
+        "viewer-rotate-left",
+        "viewer-rotate-right",
+        "viewer-reset",
+        "viewer-close",
+    ):
+        assert f'id="{element_id}"' in html
+
+
+def test_image_viewer_serves_explicit_fit_logic(tmp_path):
+    client = TestClient(create_app(Settings(archive_root=tmp_path)))
+    script = client.get("/assets/app.js").text
+
+    assert "function fitViewerImage" in script
+    assert "viewerFitScale" in script
+    assert "translate(calc(-50%" in script
+
+
+def test_ingest_x_response_persists_liked_post(tmp_path):
+    client = TestClient(create_app(Settings(archive_root=tmp_path)))
+    result = {
+        "rest_id": "99",
+        "core": {"user_results": {"result": {"rest_id": "7", "legacy": {"screen_name": "alice", "name": "Alice"}}}},
+        "legacy": {"full_text": "from chrome", "created_at": "Tue Jan 02 03:04:05 +0000 2024"},
+    }
+    payload = {"data": {"entries": [{"entryId": "tweet-99", "content": {"itemContent": {"tweet_results": {"result": result}}}}]}}
+
+    response = client.post("/api/ingest/x-response", json=payload)
+
+    assert response.status_code == 200
+    assert response.json() == {"discovered": 1, "new": 1}
+    assert client.get("/api/posts").json()[0]["text"] == "from chrome"
+
+
+def test_extension_can_announce_start(tmp_path):
+    client = TestClient(create_app(Settings(archive_root=tmp_path)))
+
+    assert client.post("/api/ingest/start").json() == {"state": "starting"}
+    status = client.get("/api/sync/status").json()
+    assert status["state"] == "starting"
+    assert status["discovered"] == 0
+
+
+def test_status_reports_archive_path_and_persistent_counts(tmp_path):
+    settings = Settings(archive_root=tmp_path)
+    result = {"rest_id": "99", "core": {"user_results": {"result": {"rest_id": "7", "core": {"screen_name": "alice", "name": "Alice"}}}}, "legacy": {"full_text": "persistent", "created_at": "Tue Jan 02 03:04:05 +0000 2024"}}
+    payload = {"data": {"entries": [{"entryId": "tweet-99", "content": {"itemContent": {"tweet_results": {"result": result}}}}]}}
+    first_client = TestClient(create_app(settings))
+    first_client.post("/api/ingest/x-response", json=payload)
+
+    restarted_client = TestClient(create_app(settings))
+    status = restarted_client.get("/api/sync/status").json()
+
+    assert status["archive_path"] == str(tmp_path.resolve())
+    assert status["posts_total"] == 1
+    assert status["media_total"] == 0
+    assert restarted_client.get("/api/posts").json()[0]["text"] == "persistent"
+
+
+def test_ingest_schedules_progressive_media_download(tmp_path, monkeypatch):
+    calls = []
+
+    async def fake_download(self):
+        calls.append(True)
+        return {"downloaded": 0, "failed": 0}
+
+    monkeypatch.setattr("local_favorites_archive.web.MediaDownloader.run", fake_download)
+    client = TestClient(create_app(Settings(archive_root=tmp_path)))
+    result = {"rest_id": "1", "core": {"user_results": {"result": {"rest_id": "7", "legacy": {"screen_name": "alice", "name": "Alice"}}}}, "legacy": {"full_text": "post", "created_at": "Tue Jan 02 03:04:05 +0000 2024"}}
+    payload = {"data": {"entries": [{"entryId": "tweet-1", "content": {"itemContent": {"tweet_results": {"result": result}}}}]}}
+
+    client.post("/api/ingest/x-response", json=payload)
+    for _ in range(20):
+        if calls:
+            break
+        time.sleep(0.01)
+
+    assert calls == [True]
+
+
+def test_tag_api_manages_assignments_and_filters_posts(tmp_path):
+    client = TestClient(create_app(Settings(archive_root=tmp_path)))
+    result = {
+        "rest_id": "99",
+        "core": {"user_results": {"result": {"rest_id": "7", "legacy": {"screen_name": "alice", "name": "Alice"}}}},
+        "legacy": {"full_text": "tag me", "created_at": "Tue Jan 02 03:04:05 +0000 2024"},
+    }
+    client.post("/api/ingest/x-response", json={"data": {"result": result}})
+
+    created = client.post("/api/tags", json={"name": "待读", "color": "#2563eb"})
+    assert created.status_code == 201
+    tag = created.json()
+    assert client.post("/api/tags", json={"name": "待读", "color": "#16a34a"}).status_code == 409
+    assert client.post(f"/api/posts/99/tags/{tag['id']}").status_code == 200
+    assert client.get("/api/posts/99").json()["tags"][0]["name"] == "待读"
+    assert client.get(f"/api/posts?tag_id={tag['id']}").json()[0]["post_id"] == "99"
+    assert client.get(f"/api/posts/count?tag_id={tag['id']}").json() == {"total": 1}
+
+    updated = client.patch(f"/api/tags/{tag['id']}", json={"name": "已整理", "color": "#0f766e"})
+    assert updated.status_code == 200
+    assert updated.json()["name"] == "已整理"
+    assert client.delete(f"/api/posts/99/tags/{tag['id']}").status_code == 204
+    assert client.delete(f"/api/tags/{tag['id']}").status_code == 204
+    assert client.get("/api/tags").json() == []
+
+
+def test_tag_api_validates_input_and_missing_records(tmp_path):
+    client = TestClient(create_app(Settings(archive_root=tmp_path)))
+
+    assert client.post("/api/tags", json={"name": "   ", "color": "#2563eb"}).status_code == 422
+    assert client.post("/api/tags", json={"name": "valid", "color": "blue"}).status_code == 422
+    assert client.patch("/api/tags/999", json={"name": "missing", "color": "#2563eb"}).status_code == 404
+    assert client.post("/api/posts/missing/tags/999").status_code == 404

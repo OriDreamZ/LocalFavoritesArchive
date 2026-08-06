@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>本地喜欢归档</title><link rel="stylesheet" href="/assets/styles.css"></head>
+<body>
+<header><div><h1>本地喜欢归档</h1><p id="summary">离线保存与检索 · 使用 Chrome 扩展同步</p></div><div class="actions"><button id="tag-manager-open" class="secondary" type="button">标签管理</button><button id="refresh" type="button">刷新</button></div></header>
+<main>
+  <form id="filters">
+    <input id="q" placeholder="搜索推文、作者或用户名">
+    <input id="author" placeholder="作者">
+    <select id="media"><option value="">全部类型</option><option value="image">图片</option><option value="video">视频</option><option value="text">文本</option></select>
+    <select id="tag-filter" aria-label="标签筛选"><option value="">全部标签</option></select>
+    <label class="filter-date"><span>起始日期</span><input id="from" type="date" aria-label="起始日期"></label>
+    <label class="filter-date"><span>截至日期</span><input id="to" type="date" aria-label="截至日期"></label>
+    <select id="sort"><option value="published_at">发布时间</option><option value="collected_at">收藏时间</option><option value="author">作者</option></select>
+    <select id="direction" aria-label="排序方向"><option value="desc">降序</option><option value="asc">升序</option></select>
+    <button type="submit">筛选</button>
+  </form>
+  <section class="progress-area" aria-label="归档进度">
+    <div class="progress-row">
+      <div class="progress-heading"><span>Likes 同步</span><span id="sync-progress-label">等待状态</span></div>
+      <progress id="sync-progress" max="100" value="0"></progress>
+    </div>
+    <div class="progress-row">
+      <div class="progress-heading"><span>媒体下载</span><span id="media-progress-label">0 / 0</span></div>
+      <progress id="media-progress" max="100" value="0"></progress>
+    </div>
+    <div class="archive-location"><span>本地存储</span><code id="archive-path">正在读取…</code></div>
+  </section>
+  <div id="status"></div>
+  <nav class="pagination" aria-label="推文分页">
+    <label>每页
+      <select id="page-size"><option value="20">20 条</option><option value="50">50 条</option><option value="100">100 条</option></select>
+    </label>
+    <div class="page-nav">
+      <button id="prev-page" class="secondary page-button" type="button" aria-label="上一页" title="上一页">‹</button>
+      <span id="page-info">第 1 / 1 页 · 共 0 条</span>
+      <button id="next-page" class="secondary page-button" type="button" aria-label="下一页" title="下一页">›</button>
+      <label class="page-jump">前往第 <input id="page-number" type="number" min="1" value="1" inputmode="numeric" aria-label="页码"> 页</label>
+      <button id="jump-page" class="secondary" type="button">跳转</button>
+    </div>
+  </nav>
+  <section id="posts"></section>
+</main>
+<dialog id="tag-dialog" aria-labelledby="tag-dialog-title">
+  <div class="dialog-head"><h2 id="tag-dialog-title">标签管理</h2><button id="tag-dialog-close" class="icon-button secondary" type="button" aria-label="关闭" title="关闭">×</button></div>
+  <form id="tag-form" class="tag-create-form">
+    <input id="tag-name" maxlength="40" required placeholder="新标签名称" aria-label="新标签名称">
+    <input id="tag-color" type="color" value="#2563eb" aria-label="标签颜色">
+    <button type="submit">新建标签</button>
+  </form>
+  <div id="tag-message" role="status"></div>
+  <div id="tag-list" class="tag-list"></div>
+</dialog>
+<dialog id="image-viewer" aria-labelledby="viewer-title">
+  <div class="viewer-shell">
+    <div class="viewer-toolbar">
+      <span id="viewer-title">图片预览</span>
+      <div class="viewer-actions">
+        <button id="viewer-zoom-out" class="secondary icon-button" type="button" aria-label="缩小" title="缩小">−</button>
+        <button id="viewer-zoom-in" class="secondary icon-button" type="button" aria-label="放大" title="放大">＋</button>
+        <button id="viewer-rotate-left" class="secondary icon-button" type="button" aria-label="向左旋转" title="向左旋转">↶</button>
+        <button id="viewer-rotate-right" class="secondary icon-button" type="button" aria-label="向右旋转" title="向右旋转">↷</button>
+        <button id="viewer-reset" class="secondary icon-button" type="button" aria-label="重置视图" title="重置视图">⟳</button>
+        <button id="viewer-close" class="secondary icon-button" type="button" aria-label="关闭图片预览" title="关闭图片预览">×</button>
+      </div>
+    </div>
+    <div class="viewer-stage">
+      <button id="viewer-prev" class="viewer-nav secondary" type="button" aria-label="上一张" title="上一张">‹</button>
+      <div id="viewer-canvas" class="viewer-canvas"><img id="viewer-image" draggable="false" alt=""></div>
+      <button id="viewer-next" class="viewer-nav secondary" type="button" aria-label="下一张" title="下一张">›</button>
+    </div>
+    <div id="viewer-caption" class="viewer-caption"></div>
+  </div>
+</dialog>
+<script src="/assets/app.js"></script>
+</body></html>

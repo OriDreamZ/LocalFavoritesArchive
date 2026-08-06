@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "Local Favorites Archive",
+  "version": "0.1.0",
+  "description": "将当前 Chrome 账号的 X Likes 保存到本地归档。",
+  "permissions": ["activeTab", "debugger", "scripting", "storage"],
+  "host_permissions": [
+    "https://x.com/*",
+    "https://twitter.com/*",
+    "http://127.0.0.1:8765/*"
+  ],
+  "background": {"service_worker": "background.js"},
+  "action": {
+    "default_title": "Local Favorites Archive",
+    "default_popup": "popup.html"
+  }
+}

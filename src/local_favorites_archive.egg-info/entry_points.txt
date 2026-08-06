@@ -1,0 +1,2 @@
+[console_scripts]
+local-favorites = local_favorites_archive.cli:main
