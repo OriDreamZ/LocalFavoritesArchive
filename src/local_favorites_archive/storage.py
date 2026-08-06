@@ -56,6 +56,12 @@ class ArchiveStore:
               new_posts INTEGER DEFAULT 0, downloaded INTEGER DEFAULT 0, failed INTEGER DEFAULT 0,
               error TEXT
             );
+            CREATE TABLE IF NOT EXISTS archive_settings (
+              key TEXT PRIMARY KEY,
+              value TEXT NOT NULL
+            );
+            INSERT OR IGNORE INTO archive_settings(key,value)
+            VALUES('stop_after_existing','50');
             CREATE TABLE IF NOT EXISTS tags (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
               name TEXT NOT NULL COLLATE NOCASE UNIQUE,
@@ -72,6 +78,22 @@ class ArchiveStore:
             CREATE INDEX IF NOT EXISTS post_tags_tag_id_idx ON post_tags(tag_id);
             CREATE VIRTUAL TABLE IF NOT EXISTS posts_fts USING fts5(post_id UNINDEXED, text, author_handle, author_name);
             """)
+
+    def get_stop_after_existing(self) -> int:
+        with self._connect() as db:
+            row = db.execute(
+                "SELECT value FROM archive_settings WHERE key='stop_after_existing'"
+            ).fetchone()
+        return int(row["value"]) if row else 50
+
+    def set_stop_after_existing(self, value: int) -> int:
+        with self._connect() as db:
+            db.execute(
+                "INSERT INTO archive_settings(key,value) VALUES('stop_after_existing',?) "
+                "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                (str(value),),
+            )
+        return value
 
     def media_path(self, post_id: str, index: int, source_url: str) -> Path:
         suffix = Path(source_url.split("?")[0]).suffix.lower() or ".bin"

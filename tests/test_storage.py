@@ -23,6 +23,30 @@ def test_upsert_is_idempotent_and_searchable(tmp_path):
     assert (tmp_path / "raw" / "42.json").exists()
 
 
+def test_stop_after_existing_defaults_to_50_and_persists(tmp_path):
+    first = ArchiveStore(tmp_path)
+    assert first.get_stop_after_existing() == 50
+
+    assert first.set_stop_after_existing(12) == 12
+    assert ArchiveStore(tmp_path).get_stop_after_existing() == 12
+
+
+def test_repeated_post_keeps_downloaded_media_state(tmp_path):
+    store = ArchiveStore(tmp_path)
+    store.upsert_post(sample_post(post_id="42"))
+    with store._connect() as db:
+        db.execute(
+            "UPDATE media SET status='downloaded',byte_size=123,checksum='saved' WHERE post_id='42'"
+        )
+
+    assert store.upsert_post(sample_post(post_id="42")) is False
+
+    media = store.get_post("42")["media"][0]
+    assert media["status"] == "downloaded"
+    assert media["byte_size"] == 123
+    assert media["checksum"] == "saved"
+
+
 def test_post_links_are_replaced_and_returned_in_order(tmp_path):
     store = ArchiveStore(tmp_path)
     first = [PostLink(0, "one.example", "https://one.example", "https://t.co/one")]
