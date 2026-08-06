@@ -116,10 +116,50 @@ def test_image_viewer_serves_explicit_fit_logic(tmp_path):
 def test_ui_script_binds_real_summary_statistics(tmp_path):
     script = TestClient(create_app(Settings(archive_root=tmp_path))).get("/assets/app.js").text
 
-    assert "hero-posts-total" in script
-    assert "hero-authors-total" in script
-    assert "hero-sync-state" in script
+    assert "overview-posts-total" in script
+    assert "overview-authors-total" in script
+    assert "overview-media-completion" in script
     assert "syncStateLabel" in script
+
+
+def test_ui_script_routes_four_workspaces_and_renders_overview(tmp_path):
+    script = TestClient(create_app(Settings(archive_root=tmp_path))).get("/assets/app.js").text
+
+    for token in (
+        "WORKSPACES",
+        "function normalizeRoute",
+        "function activateWorkspace",
+        "hashchange",
+        "aria-current",
+        "function loadOverview",
+        "function formatBytes",
+        "/api/stats/overview",
+        "overview-monthly-additions",
+        "overview-distribution",
+    ):
+        assert token in script
+
+
+def test_ui_script_uses_tag_workspace_instead_of_dialog(tmp_path):
+    script = TestClient(create_app(Settings(archive_root=tmp_path))).get("/assets/app.js").text
+
+    assert "tag-dialog" not in script
+    assert "openTagManager" not in script
+    assert "window.location.hash = '#tags'" in script
+    assert "refreshAfterTagChange" in script
+    assert "loadOverview" in script
+
+
+def test_ui_script_renders_sync_failures_and_back_to_top(tmp_path):
+    script = TestClient(create_app(Settings(archive_root=tmp_path))).get("/assets/app.js").text
+
+    assert "function loadSyncFailures" in script
+    assert "/api/sync/failures" in script
+    assert "sync-failures" in script
+    assert "failure-error" in script
+    assert "back-to-top" in script
+    assert "window.scrollY > 480" in script
+    assert "window.scrollTo({top: 0, behavior: 'smooth'})" in script
 
 
 def test_ingest_x_response_persists_liked_post(tmp_path):

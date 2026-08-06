@@ -1,9 +1,18 @@
 const $ = id => document.getElementById(id);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, character => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[character]));
+const numberFormatter = new Intl.NumberFormat('zh-CN');
+
+const WORKSPACES = {
+  overview: {title: '收藏总览', heading: 'overview-title'},
+  favorites: {title: '我的收藏', heading: 'favorites-title'},
+  sync: {title: '同步中心', heading: 'sync-title'},
+  tags: {title: '标签管理', heading: 'tags-title'},
+};
 
 let currentPage = 1;
 let totalPages = 1;
 let allTags = [];
+let pollTimer = null;
 let viewerItems = [];
 let viewerIndex = 0;
 let viewerScale = 1;
@@ -23,6 +32,42 @@ async function api(url, options = {}) {
   return body;
 }
 
+function formatNumber(value) {
+  return numberFormatter.format(Number(value) || 0);
+}
+
+function formatBytes(value) {
+  let size = Number(value) || 0;
+  if (size < 1024) return `${formatNumber(size)} B`;
+  const units = ['KB', 'MB', 'GB', 'TB'];
+  let unit = -1;
+  do {
+    size /= 1024;
+    unit += 1;
+  } while (size >= 1024 && unit < units.length - 1);
+  const digits = size >= 100 ? 0 : size >= 10 ? 1 : 2;
+  return `${size.toFixed(digits)} ${units[unit]}`;
+}
+
+function normalizeRoute(hash = window.location.hash) {
+  const route = String(hash).replace(/^#/, '');
+  return Object.hasOwn(WORKSPACES, route) ? route : 'overview';
+}
+
+function activateWorkspace({focus = false} = {}) {
+  const route = normalizeRoute();
+  document.querySelectorAll('[data-workspace]').forEach(section => {
+    section.hidden = section.dataset.workspace !== route;
+  });
+  document.querySelectorAll('[data-route]').forEach(link => {
+    const active = link.dataset.route === route;
+    link.classList.toggle('is-active', active);
+    if (active) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
+  });
+  document.title = `${WORKSPACES[route].title} · 本地收藏归档`;
+  if (focus) $(WORKSPACES[route].heading).focus({preventScroll: true});
+}
+
 function filterParams() {
   const params = new URLSearchParams({
     q: $('q').value,
@@ -40,7 +85,7 @@ function syncDateInputState(input) {
 }
 
 function updatePageControls(total) {
-  $('page-info').textContent = `第 ${currentPage} / ${totalPages} 页 · 共 ${total} 条`;
+  $('page-info').textContent = `第 ${formatNumber(currentPage)} / ${formatNumber(totalPages)} 页 · 共 ${formatNumber(total)} 条`;
   $('prev-page').disabled = currentPage <= 1;
   $('next-page').disabled = currentPage >= totalPages;
   $('page-number').max = totalPages;
@@ -49,6 +94,212 @@ function updatePageControls(total) {
 
 function safeColor(color) {
   return /^#[0-9a-f]{6}$/i.test(color) ? color : '#64748b';
+}
+
+function syncStateLabel(state) {
+  return ({
+    idle: '等待同步',
+    starting: '正在连接',
+    collecting: '正在采集',
+    downloading: '正在下载媒体',
+    finished: '同步完成',
+    error: '同步失败',
+  })[state] || '状态未知';
+}
+
+function renderOverviewStats(stats) {
+  $('overview-posts-total').textContent = formatNumber(stats.posts_total);
+  $('overview-authors-total').textContent = formatNumber(stats.authors_total);
+  $('overview-media-completion').textContent = `${stats.media_completion_percent || 0}%`;
+  $('overview-media-detail').textContent = `${formatNumber(stats.media_downloaded)} / ${formatNumber(stats.media_total)} 个媒体文件`;
+  $('overview-tagged-posts').textContent = formatNumber(stats.tagged_posts);
+  $('overview-tag-coverage').textContent = `覆盖 ${stats.tag_coverage_percent || 0}%`;
+  $('overview-archive-days').textContent = `${formatNumber(stats.archive_days)} 天`;
+  $('overview-storage-bytes').textContent = formatBytes(stats.storage_bytes);
+  $('nav-posts-count').textContent = formatNumber(stats.posts_total);
+  $('nav-failures-count').textContent = formatNumber(stats.media_failed);
+
+  const distribution = [
+    ['图片', stats.image_posts],
+    ['视频', stats.video_posts],
+    ['纯文本', stats.text_posts],
+  ];
+  const denominator = Math.max(Number(stats.posts_total) || 0, 1);
+  $('overview-distribution').innerHTML = distribution.map(([label, count]) => {
+    const percent = Math.min(100, Number(count) / denominator * 100);
+    return `<div class="distribution-row"><span>${label}</span><div class="distribution-track"><span class="distribution-fill" style="width:${percent}%"></span></div><strong class="numeric">${formatNumber(count)}</strong></div>`;
+  }).join('');
+
+  const additions = stats.monthly_additions || [];
+  const maxCount = Math.max(1, ...additions.map(item => Number(item.count) || 0));
+  $('overview-monthly-additions').innerHTML = additions.map(item => {
+    const height = Math.max(2, (Number(item.count) || 0) / maxCount * 100);
+    const label = item.month.slice(5).replace(/^0/, '') + '月';
+    return `<div class="month-column" title="${esc(item.month)}：${formatNumber(item.count)} 条"><div class="month-bar-wrap"><span class="month-bar" style="height:${height}%"></span></div><span class="month-label">${label}</span></div>`;
+  }).join('');
+}
+
+function renderOverviewSync(state) {
+  $('overview-sync-title').textContent = syncStateLabel(state.state);
+  $('overview-sync-message').textContent = state.message || '尚未开始同步，可在已登录的 Chrome 中通过扩展启动。';
+}
+
+async function loadOverview() {
+  try {
+    const [stats, state] = await Promise.all([api('/api/stats/overview'), api('/api/sync/status')]);
+    renderOverviewStats(stats);
+    renderOverviewSync(state);
+  } catch (error) {
+    $('overview-sync-title').textContent = '总览读取失败';
+    $('overview-sync-message').textContent = error.message;
+  }
+}
+
+function renderPostTags(node, detail) {
+  const assigned = detail.tags || [];
+  const assignedIds = new Set(assigned.map(tag => tag.id));
+  const remaining = allTags.filter(tag => !assignedIds.has(tag.id));
+  const chips = assigned.map(tag => `<button class="tag-chip tag-remove" type="button" data-tag-id="${tag.id}" title="移除标签 ${esc(tag.name)}" style="--tag-color:${safeColor(tag.color)}"><span>${esc(tag.name)}</span><b aria-hidden="true">×</b></button>`).join('');
+  const assignment = remaining.length
+    ? `<div class="tag-assignment"><select class="tag-select" aria-label="选择要添加的标签"><option value="">添加标签…</option>${remaining.map(tag => `<option value="${tag.id}">${esc(tag.name)}</option>`).join('')}</select><button class="tag-add secondary" type="button">添加</button></div>`
+    : allTags.length ? '' : '<button class="open-tag-manager secondary compact" type="button">新建标签</button>';
+  node.innerHTML = `<div class="tag-chips">${chips}</div>${assignment}`;
+}
+
+async function load() {
+  try {
+    const filters = filterParams();
+    const {total} = await api('/api/posts/count?' + filters);
+    const pageSize = Number($('page-size').value);
+    totalPages = Math.max(1, Math.ceil(total / pageSize));
+    currentPage = Math.min(Math.max(1, currentPage), totalPages);
+    updatePageControls(total);
+
+    const params = new URLSearchParams(filters);
+    params.set('sort', $('sort').value);
+    params.set('direction', $('direction').value);
+    params.set('limit', pageSize);
+    params.set('offset', (currentPage - 1) * pageSize);
+    const posts = await api('/api/posts?' + params);
+    $('summary').textContent = `${formatNumber(total)} 条结果`;
+    $('posts').innerHTML = posts.length ? posts.map(post => `
+      <article class="post" data-id="${esc(post.post_id)}">
+        <div class="post-head">
+          <div><span class="author">${esc(post.author_name)}</span> <span class="handle">@${esc(post.author_handle)}</span></div>
+          <span class="date">${post.published_at ? new Date(post.published_at).toLocaleString('zh-CN') : ''}</span>
+        </div>
+        <div class="text">${esc(post.text)}</div>
+        <div class="post-tags"><span class="muted">正在读取标签…</span></div>
+        <div class="media"></div>
+        <a class="original" target="_blank" rel="noreferrer" href="${esc(post.url)}">在 X 查看原文 ↗</a>
+      </article>`).join('') : '<div class="empty">没有符合条件的归档内容</div>';
+
+    await Promise.all([...document.querySelectorAll('.post')].map(async article => {
+      const detail = await api('/api/posts/' + encodeURIComponent(article.dataset.id));
+      const mediaNode = article.querySelector('.media');
+      mediaNode.innerHTML = detail.media.filter(item => item.status === 'downloaded').map(item => {
+        const filename = item.local_path.split(/[\\/]/).pop();
+        const src = '/media/' + encodeURIComponent(item.post_id) + '/' + encodeURIComponent(filename);
+        return item.kind === 'video'
+          ? `<video controls preload="metadata" src="${src}"></video>`
+          : `<img class="zoomable-media" loading="lazy" src="${src}" alt="推文图片" title="点击查看大图">`;
+      }).join('');
+      renderPostTags(article.querySelector('.post-tags'), detail);
+    }));
+  } catch (error) {
+    $('posts').innerHTML = `<div class="empty">读取归档失败：${esc(error.message)}</div>`;
+  }
+}
+
+function renderTagManager() {
+  $('tag-list').innerHTML = allTags.length ? allTags.map(tag => `
+    <div class="tag-row" data-tag-id="${tag.id}">
+      <input class="tag-row-color" type="color" value="${safeColor(tag.color)}" aria-label="${esc(tag.name)} 的颜色">
+      <input class="tag-row-name" maxlength="40" value="${esc(tag.name)}" aria-label="标签名称">
+      <span class="tag-count numeric">${formatNumber(tag.post_count)} 条</span>
+      <button class="tag-save secondary" type="button">保存</button>
+      <button class="tag-delete danger" type="button">删除</button>
+    </div>`).join('') : '<div class="empty-tag-list">还没有标签</div>';
+}
+
+async function loadTags() {
+  const selected = $('tag-filter').value;
+  allTags = await api('/api/tags');
+  $('tag-filter').innerHTML = '<option value="">全部标签</option>' + allTags.map(tag => `<option value="${tag.id}">${esc(tag.name)} (${formatNumber(tag.post_count)})</option>`).join('');
+  if (allTags.some(tag => String(tag.id) === selected)) $('tag-filter').value = selected;
+  $('nav-tags-count').textContent = formatNumber(allTags.length);
+  renderTagManager();
+}
+
+async function refreshAfterTagChange() {
+  await loadTags();
+  currentPage = 1;
+  await Promise.all([loadOverview(), load()]);
+}
+
+async function loadSyncFailures() {
+  try {
+    const failures = await api('/api/sync/failures');
+    $('sync-failures').innerHTML = failures.length ? failures.map(item => `
+      <div class="failure-row">
+        <div><strong>${esc(item.author_name || item.author_handle || '未知作者')}</strong><br><span class="muted">@${esc(item.author_handle)} · 推文 ${esc(item.post_id)}</span></div>
+        <span>${item.kind === 'video' ? '视频' : '图片'}</span>
+        <span class="failure-error">${esc(item.error || '未知错误')}</span>
+        <a href="${esc(item.url)}" target="_blank" rel="noreferrer">查看原文 ↗</a>
+      </div>`).join('') : '<div class="empty-state">当前没有媒体下载失败记录</div>';
+    $('nav-failures-count').textContent = formatNumber(failures.length);
+  } catch (error) {
+    $('sync-failures').innerHTML = `<div class="empty-state">失败记录读取失败：${esc(error.message)}</div>`;
+  }
+}
+
+function renderSyncState(state) {
+  const active = ['starting', 'collecting'].includes(state.state);
+  const sync = $('sync-progress');
+  if (active) sync.removeAttribute('value'); else sync.value = state.state === 'finished' ? 100 : 0;
+  $('sync-progress-label').textContent = active ? `已发现 ${formatNumber(state.discovered || state.posts_total)}，新增 ${formatNumber(state.new)}` : `本地已有 ${formatNumber(state.posts_total)} 条`;
+  const total = state.media_total || 0;
+  const completed = (state.media_downloaded || 0) + (state.media_failed || 0);
+  $('media-progress').value = total ? Math.round(completed / total * 100) : 0;
+  $('media-progress-label').textContent = `${formatNumber(state.media_downloaded)} / ${formatNumber(total)}${state.media_queued ? ` · 排队 ${formatNumber(state.media_queued)}` : ''}${state.media_failed ? ` · 失败 ${formatNumber(state.media_failed)}` : ''}`;
+  $('archive-path').textContent = state.archive_path || '';
+  $('sync-posts-total').textContent = formatNumber(state.posts_total);
+  $('sync-media-total').textContent = formatNumber(total);
+  $('sync-media-downloaded').textContent = formatNumber(state.media_downloaded);
+  $('sync-media-pending').textContent = `${formatNumber(state.media_queued)} / ${formatNumber(state.media_failed)}`;
+  $('nav-posts-count').textContent = formatNumber(state.posts_total);
+  $('nav-failures-count').textContent = formatNumber(state.media_failed);
+  $('status').textContent = state.message || ({
+    idle: '请在已登录的 Chrome 中打开自己的 Likes 页面，并点击扩展开始同步',
+    collecting: `正在采集：发现 ${formatNumber(state.discovered)}，新增 ${formatNumber(state.new)}`,
+    downloading: '正在下载图片与视频',
+    finished: `同步完成：下载 ${formatNumber(state.media_downloaded)}，失败 ${formatNumber(state.media_failed)}`,
+    error: `同步失败：${state.error || ''}`,
+  })[state.state] || syncStateLabel(state.state);
+  renderOverviewSync(state);
+}
+
+async function poll() {
+  if (pollTimer) clearTimeout(pollTimer);
+  try {
+    const state = await api('/api/sync/status');
+    renderSyncState(state);
+    if (['starting', 'collecting', 'downloading'].includes(state.state)) {
+      pollTimer = setTimeout(poll, 1500);
+    }
+    if (state.state === 'finished') {
+      await Promise.all([load(), loadOverview(), loadSyncFailures()]);
+    }
+  } catch (error) {
+    $('status').textContent = `状态读取失败：${error.message}`;
+  }
+}
+
+function jumpToPage() {
+  const requested = Number.parseInt($('page-number').value, 10);
+  currentPage = Number.isFinite(requested) ? Math.min(Math.max(1, requested), totalPages) : currentPage;
+  load();
+  window.scrollTo({top: 0, behavior: 'smooth'});
 }
 
 function fitViewerImage() {
@@ -115,134 +366,6 @@ function zoomViewer(factor) {
   applyViewerTransform();
 }
 
-function renderPostTags(node, detail) {
-  const assigned = detail.tags || [];
-  const assignedIds = new Set(assigned.map(tag => tag.id));
-  const remaining = allTags.filter(tag => !assignedIds.has(tag.id));
-  const chips = assigned.map(tag => `<button class="tag-chip tag-remove" type="button" data-tag-id="${tag.id}" title="移除标签 ${esc(tag.name)}" style="--tag-color:${safeColor(tag.color)}"><span>${esc(tag.name)}</span><b aria-hidden="true">×</b></button>`).join('');
-  const assignment = remaining.length
-    ? `<div class="tag-assignment"><select class="tag-select" aria-label="选择要添加的标签"><option value="">添加标签…</option>${remaining.map(tag => `<option value="${tag.id}">${esc(tag.name)}</option>`).join('')}</select><button class="tag-add secondary" type="button">添加</button></div>`
-    : allTags.length ? '' : '<button class="open-tag-manager secondary compact" type="button">新建标签</button>';
-  node.innerHTML = `<div class="tag-chips">${chips}</div>${assignment}`;
-}
-
-async function load() {
-  try {
-    const filters = filterParams();
-    const {total} = await api('/api/posts/count?' + filters);
-    const pageSize = Number($('page-size').value);
-    totalPages = Math.max(1, Math.ceil(total / pageSize));
-    currentPage = Math.min(Math.max(1, currentPage), totalPages);
-    updatePageControls(total);
-
-    const params = new URLSearchParams(filters);
-    params.set('sort', $('sort').value);
-    params.set('direction', $('direction').value);
-    params.set('limit', pageSize);
-    params.set('offset', (currentPage - 1) * pageSize);
-    const posts = await api('/api/posts?' + params);
-    $('summary').textContent = `${total} 条结果`;
-    $('posts').innerHTML = posts.length ? posts.map(post => `
-      <article class="post" data-id="${esc(post.post_id)}">
-        <div class="post-head">
-          <div><span class="author">${esc(post.author_name)}</span> <span class="handle">@${esc(post.author_handle)}</span></div>
-          <span class="date">${post.published_at ? new Date(post.published_at).toLocaleString() : ''}</span>
-        </div>
-        <div class="text">${esc(post.text)}</div>
-        <div class="post-tags"><span class="muted">正在读取标签…</span></div>
-        <div class="media"></div>
-        <a class="original" target="_blank" rel="noreferrer" href="${esc(post.url)}">在 X 查看原文 ↗</a>
-      </article>`).join('') : '<div class="empty">没有符合条件的归档内容</div>';
-
-    await Promise.all([...document.querySelectorAll('.post')].map(async article => {
-      const detail = await api('/api/posts/' + encodeURIComponent(article.dataset.id));
-      const mediaNode = article.querySelector('.media');
-      mediaNode.innerHTML = detail.media.filter(item => item.status === 'downloaded').map(item => {
-        const filename = item.local_path.split(/[\\/]/).pop();
-        const src = '/media/' + encodeURIComponent(item.post_id) + '/' + encodeURIComponent(filename);
-        return item.kind === 'video'
-          ? `<video controls preload="metadata" src="${src}"></video>`
-          : `<img class="zoomable-media" loading="lazy" src="${src}" alt="推文图片" title="点击查看大图">`;
-      }).join('');
-      renderPostTags(article.querySelector('.post-tags'), detail);
-    }));
-  } catch (error) {
-    $('status').textContent = `读取归档失败：${error.message}`;
-  }
-}
-
-function renderTagManager() {
-  $('tag-list').innerHTML = allTags.length ? allTags.map(tag => `
-    <div class="tag-row" data-tag-id="${tag.id}">
-      <input class="tag-row-color" type="color" value="${safeColor(tag.color)}" aria-label="${esc(tag.name)} 的颜色">
-      <input class="tag-row-name" maxlength="40" value="${esc(tag.name)}" aria-label="标签名称">
-      <span class="tag-count">${tag.post_count} 条</span>
-      <button class="tag-save secondary" type="button">保存</button>
-      <button class="tag-delete danger" type="button">删除</button>
-    </div>`).join('') : '<div class="empty-tag-list">还没有标签</div>';
-}
-
-async function loadTags() {
-  const selected = $('tag-filter').value;
-  allTags = await api('/api/tags');
-  $('tag-filter').innerHTML = '<option value="">全部标签</option>' + allTags.map(tag => `<option value="${tag.id}">${esc(tag.name)} (${tag.post_count})</option>`).join('');
-  if (allTags.some(tag => String(tag.id) === selected)) $('tag-filter').value = selected;
-  renderTagManager();
-}
-
-function openTagManager() {
-  $('tag-message').textContent = '';
-  if (!$('tag-dialog').open) $('tag-dialog').showModal();
-}
-
-async function refreshAfterTagChange() {
-  await loadTags();
-  currentPage = 1;
-  await load();
-}
-
-function jumpToPage() {
-  const requested = Number.parseInt($('page-number').value, 10);
-  currentPage = Number.isFinite(requested) ? Math.min(Math.max(1, requested), totalPages) : currentPage;
-  updatePageControls(Number(($('page-info').textContent.match(/共 (\d+) 条/) || [0, 0])[1]));
-  load();
-  window.scrollTo({top: 0, behavior: 'smooth'});
-}
-
-function syncStateLabel(state) {
-  return ({
-    idle: '等待同步',
-    starting: '正在连接',
-    collecting: '正在采集',
-    downloading: '正在下载媒体',
-    finished: '同步完成',
-    error: '同步失败',
-  })[state] || '状态未知';
-}
-
-async function poll() {
-  try {
-    const state = await api('/api/sync/status');
-    $('hero-posts-total').textContent = state.posts_total || 0;
-    $('hero-authors-total').textContent = state.authors_total || 0;
-    $('hero-sync-state').textContent = syncStateLabel(state.state);
-    const active = ['starting', 'collecting'].includes(state.state);
-    const sync = $('sync-progress');
-    if (active) sync.removeAttribute('value'); else sync.value = state.state === 'finished' ? 100 : 0;
-    $('sync-progress-label').textContent = active ? `已发现 ${state.discovered || state.posts_total || 0}，新增 ${state.new || 0}` : `本地已有 ${state.posts_total || 0} 条`;
-    const total = state.media_total || 0;
-    const completed = (state.media_downloaded || 0) + (state.media_failed || 0);
-    $('media-progress').value = total ? Math.round(completed / total * 100) : 0;
-    $('media-progress-label').textContent = `${state.media_downloaded || 0} / ${total}${state.media_queued ? ` · 排队 ${state.media_queued}` : ''}${state.media_failed ? ` · 失败 ${state.media_failed}` : ''}`;
-    $('archive-path').textContent = state.archive_path || '';
-    $('status').textContent = state.message || ({idle: '请在已登录的 Chrome 中打开自己的 Likes 页面，并点击扩展开始同步', collecting: `正在采集：发现 ${state.discovered || 0}，新增 ${state.new || 0}`, downloading: '正在下载图片与视频', finished: `同步完成：下载 ${state.media_downloaded || 0}，失败 ${state.media_failed || 0}`, error: `同步失败：${state.error || ''}`}[state.state] || state.state);
-    if (['starting', 'collecting', 'downloading'].includes(state.state)) setTimeout(poll, 1500);
-    if (state.state === 'finished') load();
-  } catch (error) {
-    $('status').textContent = `状态读取失败：${error.message}`;
-  }
-}
-
 $('filters').addEventListener('submit', event => { event.preventDefault(); currentPage = 1; load(); });
 for (const input of [$('from'), $('to')]) {
   syncDateInputState(input);
@@ -250,67 +373,14 @@ for (const input of [$('from'), $('to')]) {
   input.addEventListener('change', () => syncDateInputState(input));
 }
 $('page-size').addEventListener('change', () => { currentPage = 1; load(); });
-$('prev-page').addEventListener('click', () => { if (currentPage > 1) { currentPage--; load(); window.scrollTo({top: 0, behavior: 'smooth'}); } });
-$('next-page').addEventListener('click', () => { if (currentPage < totalPages) { currentPage++; load(); window.scrollTo({top: 0, behavior: 'smooth'}); } });
+$('prev-page').addEventListener('click', () => { if (currentPage > 1) { currentPage -= 1; load(); window.scrollTo({top: 0, behavior: 'smooth'}); } });
+$('next-page').addEventListener('click', () => { if (currentPage < totalPages) { currentPage += 1; load(); window.scrollTo({top: 0, behavior: 'smooth'}); } });
 $('jump-page').addEventListener('click', jumpToPage);
 $('page-number').addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); jumpToPage(); } });
-$('refresh').addEventListener('click', async () => { await loadTags(); await load(); poll(); });
-$('tag-manager-open').addEventListener('click', openTagManager);
-$('tag-dialog-close').addEventListener('click', () => $('tag-dialog').close());
-$('viewer-close').addEventListener('click', () => $('image-viewer').close());
-$('viewer-prev').addEventListener('click', () => showViewerImage(viewerIndex - 1));
-$('viewer-next').addEventListener('click', () => showViewerImage(viewerIndex + 1));
-$('viewer-zoom-out').addEventListener('click', () => zoomViewer(1 / 1.25));
-$('viewer-zoom-in').addEventListener('click', () => zoomViewer(1.25));
-$('viewer-rotate-left').addEventListener('click', () => { viewerRotation -= 90; fitViewerImage(); applyViewerTransform(); });
-$('viewer-rotate-right').addEventListener('click', () => { viewerRotation += 90; fitViewerImage(); applyViewerTransform(); });
-$('viewer-reset').addEventListener('click', resetViewerTransform);
-window.addEventListener('resize', () => {
-  if ($('image-viewer').open) {
-    fitViewerImage();
-    applyViewerTransform();
-  }
-});
-
-$('image-viewer').addEventListener('cancel', () => { viewerDragging = false; });
-$('viewer-canvas').addEventListener('wheel', event => {
-  event.preventDefault();
-  zoomViewer(event.deltaY < 0 ? 1.15 : 1 / 1.15);
-}, {passive: false});
-$('viewer-canvas').addEventListener('dblclick', () => {
-  viewerScale = viewerScale === 1 ? 2 : 1;
-  viewerX = 0;
-  viewerY = 0;
-  applyViewerTransform();
-});
-$('viewer-canvas').addEventListener('pointerdown', event => {
-  if (event.button !== 0) return;
-  viewerDragging = true;
-  viewerDragStartX = event.clientX - viewerX;
-  viewerDragStartY = event.clientY - viewerY;
-  $('viewer-canvas').setPointerCapture(event.pointerId);
-  $('viewer-canvas').classList.add('is-dragging');
-});
-$('viewer-canvas').addEventListener('pointermove', event => {
-  if (!viewerDragging) return;
-  viewerX = event.clientX - viewerDragStartX;
-  viewerY = event.clientY - viewerDragStartY;
-  applyViewerTransform();
-});
-function stopViewerDrag() {
-  viewerDragging = false;
-  $('viewer-canvas').classList.remove('is-dragging');
-}
-$('viewer-canvas').addEventListener('pointerup', stopViewerDrag);
-$('viewer-canvas').addEventListener('pointercancel', stopViewerDrag);
-document.addEventListener('keydown', event => {
-  if (!$('image-viewer').open) return;
-  if (event.key === 'ArrowLeft') showViewerImage(viewerIndex - 1);
-  if (event.key === 'ArrowRight') showViewerImage(viewerIndex + 1);
-  if (event.key === '+' || event.key === '=') zoomViewer(1.25);
-  if (event.key === '-') zoomViewer(1 / 1.25);
-  if (event.key.toLowerCase() === 'r') resetViewerTransform();
-});
+$('refresh').addEventListener('click', async () => { await Promise.all([loadTags(), load(), loadOverview(), loadSyncFailures()]); poll(); });
+window.addEventListener('hashchange', () => activateWorkspace({focus: true}));
+window.addEventListener('scroll', () => $('back-to-top').classList.toggle('is-visible', window.scrollY > 480), {passive: true});
+$('back-to-top').addEventListener('click', () => window.scrollTo({top: 0, behavior: 'smooth'}));
 
 $('tag-form').addEventListener('submit', async event => {
   event.preventDefault();
@@ -350,7 +420,11 @@ $('posts').addEventListener('click', async event => {
     openImageViewer(image);
     return;
   }
-  if (event.target.closest('.open-tag-manager')) return openTagManager();
+  if (event.target.closest('.open-tag-manager')) {
+    window.location.hash = '#tags';
+    setTimeout(() => $('tag-name').focus(), 0);
+    return;
+  }
   const article = event.target.closest('.post');
   if (!article) return;
   try {
@@ -368,14 +442,59 @@ $('posts').addEventListener('click', async event => {
       await refreshAfterTagChange();
     }
   } catch (error) {
-    $('status').textContent = `标签操作失败：${error.message}`;
+    $('posts').insertAdjacentHTML('afterbegin', `<div class="empty">标签操作失败：${esc(error.message)}</div>`);
   }
 });
 
+$('viewer-close').addEventListener('click', () => $('image-viewer').close());
+$('viewer-prev').addEventListener('click', () => showViewerImage(viewerIndex - 1));
+$('viewer-next').addEventListener('click', () => showViewerImage(viewerIndex + 1));
+$('viewer-zoom-out').addEventListener('click', () => zoomViewer(1 / 1.25));
+$('viewer-zoom-in').addEventListener('click', () => zoomViewer(1.25));
+$('viewer-rotate-left').addEventListener('click', () => { viewerRotation -= 90; fitViewerImage(); applyViewerTransform(); });
+$('viewer-rotate-right').addEventListener('click', () => { viewerRotation += 90; fitViewerImage(); applyViewerTransform(); });
+$('viewer-reset').addEventListener('click', resetViewerTransform);
+window.addEventListener('resize', () => { if ($('image-viewer').open) { fitViewerImage(); applyViewerTransform(); } });
+$('image-viewer').addEventListener('cancel', () => { viewerDragging = false; });
+$('viewer-canvas').addEventListener('wheel', event => { event.preventDefault(); zoomViewer(event.deltaY < 0 ? 1.15 : 1 / 1.15); }, {passive: false});
+$('viewer-canvas').addEventListener('dblclick', () => { viewerScale = viewerScale === 1 ? 2 : 1; viewerX = 0; viewerY = 0; applyViewerTransform(); });
+$('viewer-canvas').addEventListener('pointerdown', event => {
+  if (event.button !== 0) return;
+  viewerDragging = true;
+  viewerDragStartX = event.clientX - viewerX;
+  viewerDragStartY = event.clientY - viewerY;
+  $('viewer-canvas').setPointerCapture(event.pointerId);
+  $('viewer-canvas').classList.add('is-dragging');
+});
+$('viewer-canvas').addEventListener('pointermove', event => {
+  if (!viewerDragging) return;
+  viewerX = event.clientX - viewerDragStartX;
+  viewerY = event.clientY - viewerDragStartY;
+  applyViewerTransform();
+});
+function stopViewerDrag() {
+  viewerDragging = false;
+  $('viewer-canvas').classList.remove('is-dragging');
+}
+$('viewer-canvas').addEventListener('pointerup', stopViewerDrag);
+$('viewer-canvas').addEventListener('pointercancel', stopViewerDrag);
+document.addEventListener('keydown', event => {
+  if (!$('image-viewer').open) return;
+  if (event.key === 'ArrowLeft') showViewerImage(viewerIndex - 1);
+  if (event.key === 'ArrowRight') showViewerImage(viewerIndex + 1);
+  if (event.key === '+' || event.key === '=') zoomViewer(1.25);
+  if (event.key === '-') zoomViewer(1 / 1.25);
+  if (event.key.toLowerCase() === 'r') resetViewerTransform();
+});
+
 (async function init() {
+  if (!window.location.hash || normalizeRoute() !== window.location.hash.slice(1)) {
+    history.replaceState(null, '', '#overview');
+  }
+  activateWorkspace();
   try {
     await loadTags();
-    await load();
+    await Promise.all([load(), loadOverview(), loadSyncFailures()]);
   } catch (error) {
     $('status').textContent = `初始化失败：${error.message}`;
   }
