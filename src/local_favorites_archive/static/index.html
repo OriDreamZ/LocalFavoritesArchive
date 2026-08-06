@@ -85,14 +85,23 @@
           <h2 id="collection-title">收藏内容 <span id="summary">0 条结果</span></h2>
           <label class="page-size-control">每页<select id="page-size"><option value="20">20 条</option><option value="50">50 条</option><option value="100">100 条</option></select></label>
         </div>
+        <nav class="pagination pagination-top" aria-label="顶部推文分页">
+          <div class="page-nav">
+            <button class="secondary page-button" data-page-action="prev" type="button" aria-label="上一页" title="上一页">‹</button>
+            <span class="numeric" data-page-info>第 1 / 1 页 · 共 0 条</span>
+            <button class="secondary page-button" data-page-action="next" type="button" aria-label="下一页" title="下一页">›</button>
+            <label class="page-jump">前往第 <input data-page-number type="number" min="1" value="1" inputmode="numeric" aria-label="顶部页码"> 页</label>
+            <button class="secondary" data-page-action="jump" type="button">跳转</button>
+          </div>
+        </nav>
         <section id="posts" aria-live="polite"></section>
         <nav class="pagination" aria-label="推文分页">
           <div class="page-nav">
-            <button id="prev-page" class="secondary page-button" type="button" aria-label="上一页" title="上一页">‹</button>
-            <span id="page-info" class="numeric">第 1 / 1 页 · 共 0 条</span>
-            <button id="next-page" class="secondary page-button" type="button" aria-label="下一页" title="下一页">›</button>
-            <label class="page-jump">前往第 <input id="page-number" type="number" min="1" value="1" inputmode="numeric" aria-label="页码"> 页</label>
-            <button id="jump-page" class="secondary" type="button">跳转</button>
+            <button id="prev-page" class="secondary page-button" data-page-action="prev" type="button" aria-label="上一页" title="上一页">‹</button>
+            <span id="page-info" class="numeric" data-page-info>第 1 / 1 页 · 共 0 条</span>
+            <button id="next-page" class="secondary page-button" data-page-action="next" type="button" aria-label="下一页" title="下一页">›</button>
+            <label class="page-jump">前往第 <input id="page-number" data-page-number type="number" min="1" value="1" inputmode="numeric" aria-label="页码"> 页</label>
+            <button id="jump-page" class="secondary" data-page-action="jump" type="button">跳转</button>
           </div>
         </nav>
       </section>

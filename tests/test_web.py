@@ -164,6 +164,26 @@ def test_ui_script_renders_sync_failures_and_back_to_top(tmp_path):
     assert "formatNumber(failures.length)" not in script
 
 
+def test_favorites_has_synchronized_top_and_bottom_pagination(tmp_path):
+    client = TestClient(create_app(Settings(archive_root=tmp_path)))
+    html = client.get("/").text
+    script = client.get("/assets/app.js").text
+
+    assert 'aria-label="顶部推文分页"' in html
+    assert html.count('class="pagination') == 2
+    assert html.count('data-page-action="prev"') == 2
+    assert html.count('data-page-action="next"') == 2
+    assert html.count('data-page-action="jump"') == 2
+    assert html.count('data-page-info') == 2
+    assert html.count('data-page-number') == 2
+    assert html.count('id="prev-page"') == 1
+    assert "function setupPagination" in script
+    assert "document.querySelectorAll('.pagination')" in script
+    assert "scrollToCollectionStart" in script
+    assert "async function changePage" in script
+    assert "await changePage" in script
+
+
 def test_ingest_x_response_persists_liked_post(tmp_path):
     client = TestClient(create_app(Settings(archive_root=tmp_path)))
     result = {

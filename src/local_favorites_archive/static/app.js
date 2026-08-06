@@ -86,11 +86,14 @@ function syncDateInputState(input) {
 }
 
 function updatePageControls(total) {
-  $('page-info').textContent = `第 ${formatNumber(currentPage)} / ${formatNumber(totalPages)} 页 · 共 ${formatNumber(total)} 条`;
-  $('prev-page').disabled = currentPage <= 1;
-  $('next-page').disabled = currentPage >= totalPages;
-  $('page-number').max = totalPages;
-  $('page-number').value = currentPage;
+  const label = `第 ${formatNumber(currentPage)} / ${formatNumber(totalPages)} 页 · 共 ${formatNumber(total)} 条`;
+  document.querySelectorAll('[data-page-info]').forEach(node => { node.textContent = label; });
+  document.querySelectorAll('[data-page-action="prev"]').forEach(node => { node.disabled = currentPage <= 1; });
+  document.querySelectorAll('[data-page-action="next"]').forEach(node => { node.disabled = currentPage >= totalPages; });
+  document.querySelectorAll('[data-page-number]').forEach(node => {
+    node.max = totalPages;
+    node.value = currentPage;
+  });
 }
 
 function safeColor(color) {
@@ -295,11 +298,34 @@ async function poll() {
   }
 }
 
-function jumpToPage() {
-  const requested = Number.parseInt($('page-number').value, 10);
-  currentPage = Number.isFinite(requested) ? Math.min(Math.max(1, requested), totalPages) : currentPage;
-  load();
-  window.scrollTo({top: 0, behavior: 'smooth'});
+function scrollToCollectionStart() {
+  $('collection').scrollIntoView({behavior: 'smooth', block: 'start'});
+}
+
+async function changePage(nextPage) {
+  currentPage = Math.min(Math.max(1, nextPage), totalPages);
+  await load();
+  scrollToCollectionStart();
+}
+
+async function jumpToPage(input) {
+  const requested = Number.parseInt(input.value, 10);
+  await changePage(Number.isFinite(requested) ? requested : currentPage);
+}
+
+function setupPagination(pagination) {
+  pagination.addEventListener('click', async event => {
+    const action = event.target.closest('[data-page-action]')?.dataset.pageAction;
+    if (action === 'prev' && currentPage > 1) await changePage(currentPage - 1);
+    else if (action === 'next' && currentPage < totalPages) await changePage(currentPage + 1);
+    else if (action === 'jump') await jumpToPage(pagination.querySelector('[data-page-number]'));
+  });
+  pagination.querySelector('[data-page-number]').addEventListener('keydown', async event => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      await jumpToPage(event.currentTarget);
+    }
+  });
 }
 
 function fitViewerImage() {
@@ -373,10 +399,7 @@ for (const input of [$('from'), $('to')]) {
   input.addEventListener('change', () => syncDateInputState(input));
 }
 $('page-size').addEventListener('change', () => { currentPage = 1; load(); });
-$('prev-page').addEventListener('click', () => { if (currentPage > 1) { currentPage -= 1; load(); window.scrollTo({top: 0, behavior: 'smooth'}); } });
-$('next-page').addEventListener('click', () => { if (currentPage < totalPages) { currentPage += 1; load(); window.scrollTo({top: 0, behavior: 'smooth'}); } });
-$('jump-page').addEventListener('click', jumpToPage);
-$('page-number').addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); jumpToPage(); } });
+document.querySelectorAll('.pagination').forEach(setupPagination);
 $('refresh').addEventListener('click', async () => { await Promise.all([loadTags(), load(), loadOverview(), loadSyncFailures()]); poll(); });
 window.addEventListener('hashchange', () => activateWorkspace({focus: true}));
 window.addEventListener('scroll', () => $('back-to-top').classList.toggle('is-visible', window.scrollY > 480), {passive: true});
