@@ -33,6 +33,8 @@ For every successfully parsed post in response order, the service calls `upsert_
 
 The streak carries across X response batches. The service evaluates the stop rule after processing the complete response so that no post already delivered in that response is discarded. It requests a stop when the final consecutive suffix reaches the configured threshold. If a later post in the same response is new, the final streak is zero and no stop is requested.
 
+Once `stop_requested` becomes true, it remains latched for the rest of that sync run even if an already completed network response arrives while the extension is stopping. A new call to the ingest-start endpoint clears the latch and resets the streak.
+
 The ingest response adds:
 
 ```json
