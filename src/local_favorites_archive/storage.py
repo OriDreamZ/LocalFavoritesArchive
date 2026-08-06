@@ -41,6 +41,15 @@ class ArchiveStore:
               checksum TEXT, status TEXT NOT NULL DEFAULT 'queued', error TEXT,
               PRIMARY KEY(post_id, media_index), FOREIGN KEY(post_id) REFERENCES posts(post_id)
             );
+            CREATE TABLE IF NOT EXISTS post_links (
+              post_id TEXT NOT NULL,
+              link_index INTEGER NOT NULL,
+              display_url TEXT NOT NULL,
+              expanded_url TEXT NOT NULL,
+              short_url TEXT NOT NULL,
+              PRIMARY KEY(post_id, link_index),
+              FOREIGN KEY(post_id) REFERENCES posts(post_id) ON DELETE CASCADE
+            );
             CREATE TABLE IF NOT EXISTS sync_runs (
               id INTEGER PRIMARY KEY AUTOINCREMENT, started_at TEXT NOT NULL,
               finished_at TEXT, status TEXT NOT NULL, discovered INTEGER DEFAULT 0,
@@ -82,6 +91,14 @@ class ArchiveStore:
                 (post.post_id, post.url, post.text, post.author_id, post.author_handle, post.author_name, post.published_at.isoformat() if post.published_at else None, post.collected_at.isoformat(), post.collected_at.isoformat(), post.reply_to_id, post.quote_id, post.language, str(raw_path.relative_to(self.root))))
             db.execute("DELETE FROM posts_fts WHERE post_id=?", (post.post_id,))
             db.execute("INSERT INTO posts_fts(post_id,text,author_handle,author_name) VALUES(?,?,?,?)", (post.post_id, post.text, post.author_handle, post.author_name))
+            db.execute("DELETE FROM post_links WHERE post_id=?", (post.post_id,))
+            db.executemany(
+                "INSERT INTO post_links(post_id,link_index,display_url,expanded_url,short_url) VALUES(?,?,?,?,?)",
+                [
+                    (post.post_id, link.index, link.display_url, link.expanded_url, link.short_url)
+                    for link in post.links
+                ],
+            )
             for item in post.media:
                 local_path = str(self.media_path(post.post_id, item.index, item.source_url).relative_to(self.root))
                 db.execute("""INSERT INTO media(post_id,media_index,kind,source_url,local_path,mime_type,width,height,duration_ms,status,error)
@@ -131,6 +148,10 @@ class ArchiveStore:
             if not row: return None
             data = dict(row)
             data["media"] = [dict(m) for m in db.execute("SELECT * FROM media WHERE post_id=? ORDER BY media_index", (post_id,)).fetchall()]
+            data["links"] = [dict(link) for link in db.execute(
+                "SELECT link_index,display_url,expanded_url,short_url FROM post_links WHERE post_id=? ORDER BY link_index",
+                (post_id,),
+            ).fetchall()]
             data["tags"] = [dict(tag) for tag in db.execute(
                 "SELECT t.id,t.name,t.color FROM tags t JOIN post_tags pt ON pt.tag_id=t.id WHERE pt.post_id=? ORDER BY t.name COLLATE NOCASE",
                 (post_id,),

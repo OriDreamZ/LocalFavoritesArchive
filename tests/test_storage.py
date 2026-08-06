@@ -1,14 +1,14 @@
 from datetime import datetime, timezone
 import pytest
-from local_favorites_archive.models import MediaItem, Post
+from local_favorites_archive.models import MediaItem, Post, PostLink
 from local_favorites_archive.storage import ArchiveStore
 
 
-def sample_post(text="hello archive", post_id="42", handle="a", published_at=None, collected_at=None, with_media=True):
+def sample_post(text="hello archive", post_id="42", handle="a", published_at=None, collected_at=None, with_media=True, links=None):
     published_at = published_at or datetime(2024, 1, 2, tzinfo=timezone.utc)
     collected_at = collected_at or datetime.now(timezone.utc)
     media = [MediaItem(0, "image", "https://pbs.twimg.com/media/a.jpg?name=orig")] if with_media else []
-    return Post(post_id, f"https://x.com/{handle}/status/{post_id}", text, "1", handle, handle.title(), published_at, collected_at, raw={"id": post_id}, media=media)
+    return Post(post_id, f"https://x.com/{handle}/status/{post_id}", text, "1", handle, handle.title(), published_at, collected_at, raw={"id": post_id}, media=media, links=links or [])
 
 
 def test_upsert_is_idempotent_and_searchable(tmp_path):
@@ -21,6 +21,23 @@ def test_upsert_is_idempotent_and_searchable(tmp_path):
     detail = store.get_post("42")
     assert detail["media"][0]["source_url"].startswith("https://pbs.twimg.com")
     assert (tmp_path / "raw" / "42.json").exists()
+
+
+def test_post_links_are_replaced_and_returned_in_order(tmp_path):
+    store = ArchiveStore(tmp_path)
+    first = [PostLink(0, "one.example", "https://one.example", "https://t.co/one")]
+    second = [
+        PostLink(0, "two.example", "https://two.example", "https://t.co/two"),
+        PostLink(1, "three.example", "https://three.example", "https://t.co/three"),
+    ]
+
+    store.upsert_post(sample_post(post_id="42", links=first))
+    store.upsert_post(sample_post(post_id="42", links=second))
+
+    assert store.get_post("42")["links"] == [
+        {"link_index": 0, "display_url": "two.example", "expanded_url": "https://two.example", "short_url": "https://t.co/two"},
+        {"link_index": 1, "display_url": "three.example", "expanded_url": "https://three.example", "short_url": "https://t.co/three"},
+    ]
 
 
 def test_media_path_is_stable(tmp_path):
