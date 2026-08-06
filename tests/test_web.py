@@ -38,6 +38,20 @@ def test_date_filters_have_visible_distinct_labels(tmp_path):
     assert 'id="to" type="date" aria-label="截至日期"' in html
 
 
+def test_ui_uses_approved_archive_library_shell(tmp_path):
+    html = TestClient(create_app(Settings(archive_root=tmp_path))).get("/").text
+
+    assert 'class="app-sidebar"' in html
+    assert 'id="collection"' in html
+    assert 'id="sync-section"' in html
+    assert 'id="hero-posts-total"' in html
+    assert 'id="hero-authors-total"' in html
+    assert 'id="hero-sync-state"' in html
+    assert "存下你的喜爱" in html
+    assert "喜欢过的内容，值得被找回。" in html
+    assert "把 X 上稍纵即逝的喜欢" in html
+
+
 def test_ui_has_local_image_viewer_controls(tmp_path):
     html = TestClient(create_app(Settings(archive_root=tmp_path))).get("/").text
 
