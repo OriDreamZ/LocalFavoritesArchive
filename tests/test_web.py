@@ -22,8 +22,8 @@ def test_local_api_and_ui(tmp_path):
     assert 'id="page-info"' in client.get("/").text
     assert 'value="text"' in client.get("/").text
     assert 'id="tag-filter"' in client.get("/").text
-    assert 'id="tag-manager-open"' in client.get("/").text
-    assert 'id="tag-dialog"' in client.get("/").text
+    assert 'id="workspace-tags"' in client.get("/").text
+    assert 'id="tag-form"' in client.get("/").text
     assert 'id="page-number"' in client.get("/").text
     assert 'id="jump-page"' in client.get("/").text
     assert client.get("/api/posts/count").json() == {"total": 0}
@@ -47,14 +47,42 @@ def test_ui_uses_approved_archive_library_shell(tmp_path):
 
     assert 'class="app-sidebar"' in html
     assert 'id="collection"' in html
-    assert 'id="sync-section"' in html
-    assert 'id="hero-posts-total"' in html
-    assert 'id="hero-authors-total"' in html
-    assert 'id="hero-sync-state"' in html
-    assert "存下你的喜爱" in html
-    assert "PERSONAL CONTENT ARCHIVE" in html
-    assert "喜欢过的内容，值得被找回。" in html
-    assert "把 X 上稍纵即逝的喜欢" in html
+    assert 'id="workspace-sync"' in html
+    assert 'id="overview-posts-total"' in html
+    assert 'id="overview-authors-total"' in html
+    assert 'id="overview-media-completion"' in html
+    assert "收藏归档" in html
+    assert "收藏总览" in html
+    assert "我的收藏" in html
+    assert "同步中心" in html
+
+
+def test_ui_has_four_workspace_dashboard_shell(tmp_path):
+    html = TestClient(create_app(Settings(archive_root=tmp_path))).get("/").text
+
+    for route in ("overview", "favorites", "sync", "tags"):
+        assert f'href="#{route}"' in html
+        assert f'id="workspace-{route}"' in html
+        assert f'data-workspace="{route}"' in html
+    for element_id in (
+        "nav-posts-count",
+        "nav-failures-count",
+        "nav-tags-count",
+        "overview-posts-total",
+        "overview-authors-total",
+        "overview-media-completion",
+        "overview-tagged-posts",
+        "overview-distribution",
+        "overview-monthly-additions",
+        "overview-archive-days",
+        "overview-storage-bytes",
+        "sync-failures",
+        "back-to-top",
+    ):
+        assert f'id="{element_id}"' in html
+    assert 'id="tag-dialog"' not in html
+    assert 'id="tag-manager-open"' not in html
+    assert 'id="image-viewer"' in html
 
 
 def test_ui_has_local_image_viewer_controls(tmp_path):

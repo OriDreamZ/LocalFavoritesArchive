@@ -3,101 +3,142 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>存下你的喜爱 · 本地收藏资料库</title>
+  <title>收藏总览 · 本地收藏归档</title>
   <link rel="stylesheet" href="/assets/styles.css">
 </head>
 <body>
 <div class="app-shell">
   <aside class="app-sidebar">
-    <a class="brand" href="#collection" aria-label="存下你的喜爱，返回我的收藏">
-      <span class="brand-mark" aria-hidden="true">✦</span>
-      <span class="brand-copy"><strong>存下你的喜爱</strong><small>LOCAL FAVORITES</small></span>
+    <a class="brand" href="#overview" aria-label="本地收藏归档，前往总览">
+      <span class="brand-mark" aria-hidden="true">▣</span>
+      <span class="brand-copy"><strong>收藏归档</strong><small>FAVORITES ARCHIVE</small></span>
     </a>
+    <span class="nav-label">工作台</span>
     <nav class="side-nav" aria-label="主要导航">
-      <a class="side-nav-item is-active" href="#collection"><span aria-hidden="true">▦</span>我的收藏</a>
-      <a class="side-nav-item" href="#sync-section"><span aria-hidden="true">↻</span>同步状态</a>
-      <button id="tag-manager-open" class="side-nav-item" type="button"><span aria-hidden="true">#</span>标签管理</button>
+      <a class="side-nav-item" href="#overview" data-route="overview"><span class="nav-icon" aria-hidden="true">▦</span><span>总览</span></a>
+      <a class="side-nav-item" href="#favorites" data-route="favorites"><span class="nav-icon" aria-hidden="true">▤</span><span>我的收藏</span><b id="nav-posts-count" class="nav-count">0</b></a>
+      <a class="side-nav-item" href="#sync" data-route="sync"><span class="nav-icon" aria-hidden="true">↻</span><span>同步中心</span><b id="nav-failures-count" class="nav-count">0</b></a>
+      <a class="side-nav-item" href="#tags" data-route="tags"><span class="nav-icon" aria-hidden="true">#</span><span>标签管理</span><b id="nav-tags-count" class="nav-count">0</b></a>
     </nav>
-    <div class="library-status"><span aria-hidden="true"></span>本地资料库</div>
+    <div class="library-status"><span aria-hidden="true"></span><div><strong>本地资料库</strong><small>数据仅保存在本机</small></div></div>
   </aside>
 
-  <main class="main-content">
-    <header class="hero">
-      <div class="hero-copy">
-        <span class="hero-kicker">PERSONAL CONTENT ARCHIVE</span>
-        <h1>喜欢过的内容，值得被找回。</h1>
-        <p>把 X 上稍纵即逝的喜欢，沉淀为可搜索、可筛选、可长期保存的本地内容库。</p>
-      </div>
-      <button id="refresh" class="primary-action" type="button"><span aria-hidden="true">↻</span>刷新归档</button>
-    </header>
+  <main class="workspace-main">
+    <section id="workspace-overview" class="workspace" data-workspace="overview" aria-labelledby="overview-title">
+      <header class="page-header">
+        <div><span class="page-kicker">PERSONAL ARCHIVE / OVERVIEW</span><h1 id="overview-title" tabindex="-1">收藏总览</h1><p>查看本地归档规模、媒体完整度与最近新增趋势。</p></div>
+        <button id="refresh" class="primary-action" type="button"><span aria-hidden="true">↻</span>刷新归档</button>
+      </header>
 
-    <section class="summary-strip" aria-label="归档概览">
-      <div class="summary-item"><span>已归档内容</span><strong id="hero-posts-total">0</strong></div>
-      <div class="summary-item"><span>收藏的作者</span><strong id="hero-authors-total">0</strong></div>
-      <div class="summary-item"><span>同步状态</span><strong id="hero-sync-state">读取中</strong></div>
-    </section>
+      <section class="metric-grid" aria-label="核心统计">
+        <article class="metric-card metric-card-featured"><span>归档内容</span><strong id="overview-posts-total" class="numeric">0</strong><small>本地已保存的推文</small></article>
+        <article class="metric-card"><span>收藏作者</span><strong id="overview-authors-total" class="numeric">0</strong><small>不同的发布账号</small></article>
+        <article class="metric-card"><span>媒体完整率</span><strong id="overview-media-completion" class="numeric">0%</strong><small id="overview-media-detail">0 / 0 个媒体文件</small></article>
+        <article class="metric-card"><span>已打标签内容</span><strong id="overview-tagged-posts" class="numeric">0</strong><small id="overview-tag-coverage">覆盖 0%</small></article>
+      </section>
 
-    <form id="filters" aria-label="收藏筛选">
-      <label class="search-field"><span class="sr-only">搜索</span><input id="q" placeholder="搜索文字、作者或关键词"></label>
-      <label><span class="sr-only">作者</span><input id="author" placeholder="所有作者"></label>
-      <label><span class="sr-only">媒体类型</span><select id="media"><option value="">所有媒体</option><option value="image">图片</option><option value="video">视频</option><option value="text">纯文本</option></select></label>
-      <label><span class="sr-only">标签</span><select id="tag-filter" aria-label="标签筛选"><option value="">全部标签</option></select></label>
-      <label class="filter-date"><span>起始日期</span><span class="date-control"><input id="from" type="date" aria-label="起始日期"><span class="date-placeholder" aria-hidden="true">年/月/日</span></span></label>
-      <label class="filter-date"><span>截至日期</span><span class="date-control"><input id="to" type="date" aria-label="截至日期"><span class="date-placeholder" aria-hidden="true">年/月/日</span></span></label>
-      <label><span class="sr-only">排序字段</span><select id="sort"><option value="published_at">发布时间</option><option value="collected_at">收藏时间</option><option value="author">作者名称</option></select></label>
-      <label><span class="sr-only">排序方向</span><select id="direction" aria-label="排序方向"><option value="desc">降序</option><option value="asc">升序</option></select></label>
-      <button type="submit">筛选</button>
-    </form>
+      <section class="sync-banner" aria-labelledby="overview-sync-title">
+        <span class="sync-banner-icon" aria-hidden="true">↻</span>
+        <div><span class="section-kicker">SYNC STATUS</span><h2 id="overview-sync-title">同步状态读取中</h2><p id="overview-sync-message">正在读取本地同步状态…</p></div>
+        <a href="#sync">查看同步中心 <span aria-hidden="true">›</span></a>
+      </section>
 
-    <section id="sync-section" class="sync-section" aria-labelledby="sync-title">
-      <div class="section-heading">
-        <div><span class="section-kicker">Chrome 扩展同步</span><h2 id="sync-title">同步状态</h2></div>
-        <div id="status" role="status"></div>
-      </div>
-      <div class="progress-area" aria-label="归档进度">
-        <div class="progress-row">
-          <div class="progress-heading"><span>Likes 同步</span><span id="sync-progress-label">等待状态</span></div>
-          <progress id="sync-progress" max="100" value="0"></progress>
-        </div>
-        <div class="progress-row">
-          <div class="progress-heading"><span>媒体下载</span><span id="media-progress-label">0 / 0</span></div>
-          <progress id="media-progress" max="100" value="0"></progress>
-        </div>
-        <div class="archive-location"><span>本地存储</span><code id="archive-path">正在读取…</code></div>
+      <section class="overview-panel distribution-panel" aria-labelledby="distribution-title">
+        <div class="panel-heading"><div><span class="section-kicker">CONTENT MIX</span><h2 id="distribution-title">内容类型分布</h2></div><span>按已归档推文统计</span></div>
+        <div id="overview-distribution" class="distribution-list" aria-live="polite"></div>
+      </section>
+
+      <div class="overview-detail-grid">
+        <section class="overview-panel" aria-labelledby="monthly-title">
+          <div class="panel-heading"><div><span class="section-kicker">RECENT ADDITIONS</span><h2 id="monthly-title">最近 12 个月新增</h2></div></div>
+          <div id="overview-monthly-additions" class="monthly-chart" aria-live="polite"></div>
+        </section>
+        <section class="overview-panel archive-detail" aria-labelledby="archive-detail-title">
+          <div class="panel-heading"><div><span class="section-kicker">LOCAL ARCHIVE</span><h2 id="archive-detail-title">本地归档</h2></div></div>
+          <dl>
+            <div><dt>归档覆盖天数</dt><dd id="overview-archive-days" class="numeric">0 天</dd></div>
+            <div><dt>媒体占用空间</dt><dd id="overview-storage-bytes" class="numeric">0 B</dd></div>
+          </dl>
+        </section>
       </div>
     </section>
 
-    <section id="collection" class="collection-section" aria-labelledby="collection-title">
-      <div class="collection-heading">
-        <h2 id="collection-title">全部收藏 <span id="summary">0 条</span></h2>
-        <label class="page-size-control">每页
-          <select id="page-size"><option value="20">20 条</option><option value="50">50 条</option><option value="100">100 条</option></select>
-        </label>
-      </div>
-      <section id="posts" aria-live="polite"></section>
-      <nav class="pagination" aria-label="推文分页">
-        <div class="page-nav">
-          <button id="prev-page" class="secondary page-button" type="button" aria-label="上一页" title="上一页">‹</button>
-          <span id="page-info">第 1 / 1 页 · 共 0 条</span>
-          <button id="next-page" class="secondary page-button" type="button" aria-label="下一页" title="下一页">›</button>
-          <label class="page-jump">前往第 <input id="page-number" type="number" min="1" value="1" inputmode="numeric" aria-label="页码"> 页</label>
-          <button id="jump-page" class="secondary" type="button">跳转</button>
+    <section id="workspace-favorites" class="workspace" data-workspace="favorites" aria-labelledby="favorites-title" hidden>
+      <header class="page-header compact-header">
+        <div><span class="page-kicker">YOUR COLLECTION</span><h1 id="favorites-title" tabindex="-1">我的收藏</h1><p>搜索、筛选并整理已经保存在本地的内容。</p></div>
+      </header>
+
+      <form id="filters" aria-label="收藏筛选">
+        <label class="search-field"><span class="sr-only">搜索</span><input id="q" placeholder="搜索文字、作者或关键词"></label>
+        <label><span class="sr-only">作者</span><input id="author" placeholder="所有作者"></label>
+        <label><span class="sr-only">媒体类型</span><select id="media"><option value="">所有媒体</option><option value="image">图片</option><option value="video">视频</option><option value="text">纯文本</option></select></label>
+        <label><span class="sr-only">标签</span><select id="tag-filter" aria-label="标签筛选"><option value="">全部标签</option></select></label>
+        <label class="filter-date"><span>起始日期</span><span class="date-control"><input id="from" type="date" aria-label="起始日期"><span class="date-placeholder" aria-hidden="true">年/月/日</span></span></label>
+        <label class="filter-date"><span>截至日期</span><span class="date-control"><input id="to" type="date" aria-label="截至日期"><span class="date-placeholder" aria-hidden="true">年/月/日</span></span></label>
+        <label><span class="sr-only">排序字段</span><select id="sort"><option value="published_at">发布时间</option><option value="collected_at">收藏时间</option><option value="author">作者名称</option></select></label>
+        <label><span class="sr-only">排序方向</span><select id="direction" aria-label="排序方向"><option value="desc">降序</option><option value="asc">升序</option></select></label>
+        <button type="submit">筛选</button>
+      </form>
+
+      <section id="collection" class="collection-section" aria-labelledby="collection-title">
+        <div class="collection-heading">
+          <h2 id="collection-title">收藏内容 <span id="summary">0 条结果</span></h2>
+          <label class="page-size-control">每页<select id="page-size"><option value="20">20 条</option><option value="50">50 条</option><option value="100">100 条</option></select></label>
         </div>
-      </nav>
+        <section id="posts" aria-live="polite"></section>
+        <nav class="pagination" aria-label="推文分页">
+          <div class="page-nav">
+            <button id="prev-page" class="secondary page-button" type="button" aria-label="上一页" title="上一页">‹</button>
+            <span id="page-info" class="numeric">第 1 / 1 页 · 共 0 条</span>
+            <button id="next-page" class="secondary page-button" type="button" aria-label="下一页" title="下一页">›</button>
+            <label class="page-jump">前往第 <input id="page-number" type="number" min="1" value="1" inputmode="numeric" aria-label="页码"> 页</label>
+            <button id="jump-page" class="secondary" type="button">跳转</button>
+          </div>
+        </nav>
+      </section>
+    </section>
+
+    <section id="workspace-sync" class="workspace" data-workspace="sync" aria-labelledby="sync-title" hidden>
+      <header class="page-header compact-header">
+        <div><span class="page-kicker">ARCHIVE ACTIVITY</span><h1 id="sync-title" tabindex="-1">同步中心</h1><p>查看 Chrome 扩展采集状态、媒体下载进度和失败记录。</p></div>
+      </header>
+      <div id="status" class="status-message" role="status">正在读取同步状态…</div>
+      <section class="sync-count-grid" aria-label="同步计数">
+        <div><span>归档内容</span><strong id="sync-posts-total" class="numeric">0</strong></div>
+        <div><span>媒体总数</span><strong id="sync-media-total" class="numeric">0</strong></div>
+        <div><span>已下载</span><strong id="sync-media-downloaded" class="numeric">0</strong></div>
+        <div><span>排队 / 失败</span><strong id="sync-media-pending" class="numeric">0 / 0</strong></div>
+      </section>
+      <section class="progress-area" aria-label="归档进度">
+        <div class="progress-row"><div class="progress-heading"><span>Likes 同步</span><span id="sync-progress-label">等待状态</span></div><progress id="sync-progress" max="100" value="0"></progress></div>
+        <div class="progress-row"><div class="progress-heading"><span>媒体下载</span><span id="media-progress-label">0 / 0</span></div><progress id="media-progress" max="100" value="0"></progress></div>
+        <div class="archive-location"><span>本地存储地址</span><code id="archive-path">正在读取…</code></div>
+      </section>
+      <section class="failure-panel" aria-labelledby="failures-title">
+        <div class="panel-heading"><div><span class="section-kicker">MEDIA FAILURES</span><h2 id="failures-title">媒体下载失败记录</h2></div><span>最多显示 200 条</span></div>
+        <div id="sync-failures" class="failure-list" aria-live="polite"><div class="empty-state">正在读取失败记录…</div></div>
+      </section>
+    </section>
+
+    <section id="workspace-tags" class="workspace" data-workspace="tags" aria-labelledby="tags-title" hidden>
+      <header class="page-header compact-header">
+        <div><span class="page-kicker">LOCAL ORGANIZATION</span><h1 id="tags-title" tabindex="-1">标签管理</h1><p>创建和维护本地标签。删除标签不会删除任何推文内容。</p></div>
+      </header>
+      <section class="tag-manager" aria-labelledby="tag-create-title">
+        <div class="panel-heading"><div><span class="section-kicker">CREATE TAG</span><h2 id="tag-create-title">新建标签</h2></div></div>
+        <form id="tag-form" class="tag-create-form">
+          <input id="tag-name" maxlength="40" required placeholder="新标签名称" aria-label="新标签名称">
+          <input id="tag-color" type="color" value="#176b53" aria-label="标签颜色">
+          <button type="submit">新建标签</button>
+        </form>
+        <div id="tag-message" role="status"></div>
+        <div id="tag-list" class="tag-list"></div>
+      </section>
     </section>
   </main>
 </div>
 
-<dialog id="tag-dialog" aria-labelledby="tag-dialog-title">
-  <div class="dialog-head"><h2 id="tag-dialog-title">标签管理</h2><button id="tag-dialog-close" class="icon-button secondary" type="button" aria-label="关闭" title="关闭">×</button></div>
-  <form id="tag-form" class="tag-create-form">
-    <input id="tag-name" maxlength="40" required placeholder="新标签名称" aria-label="新标签名称">
-    <input id="tag-color" type="color" value="#176b53" aria-label="标签颜色">
-    <button type="submit">新建标签</button>
-  </form>
-  <div id="tag-message" role="status"></div>
-  <div id="tag-list" class="tag-list"></div>
-</dialog>
+<button id="back-to-top" class="back-to-top" type="button" aria-label="返回页面顶部" title="返回页面顶部">↑</button>
 
 <dialog id="image-viewer" aria-labelledby="viewer-title">
   <div class="viewer-shell">
