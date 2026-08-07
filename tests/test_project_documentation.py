@@ -20,9 +20,8 @@ def test_project_declares_gpl_3_or_later() -> None:
 
     assert project["readme"] == "README.md"
     assert project["license"] == "GPL-3.0-or-later"
-    assert (
-        "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)"
-        in project["classifiers"]
+    assert not any(
+        classifier.startswith("License ::") for classifier in project["classifiers"]
     )
 
 
