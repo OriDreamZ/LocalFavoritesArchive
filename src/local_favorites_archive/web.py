@@ -4,7 +4,7 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field, field_validator
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from .collector import posts_from_x_response
@@ -73,6 +73,63 @@ def create_app(settings: Settings) -> FastAPI:
             if mark_finished:
                 state.update({"state": "finished", "message": "同步与媒体下载完成"})
 
+    active_states = {"starting", "collecting", "downloading", "retrying"}
+
+    def ensure_retry_available() -> None:
+        if state.get("state") in active_states or download_lock.locked():
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "当前有同步或媒体下载任务正在执行",
+            )
+
+    async def retry_failed_media(
+        targets: list[tuple[str, int]] | None,
+        requested: int,
+    ) -> None:
+        claimed: list[tuple[str, int]] = []
+        try:
+            async with download_lock:
+                claimed = store.claim_failed_media(targets)
+                result = await MediaDownloader(
+                    store,
+                    settings.max_media_concurrency,
+                ).run(targets=claimed)
+            state.update({
+                "state": "finished",
+                "retry_requested": requested,
+                "retry_downloaded": result["downloaded"],
+                "retry_failed": result["failed"],
+                "message": (
+                    f"媒体重试完成：成功 {result['downloaded']}，"
+                    f"失败 {result['failed']}"
+                ),
+            })
+        except Exception as exc:
+            if claimed:
+                store.restore_claimed_media_failures(claimed, str(exc))
+            state.update({
+                "state": "error",
+                "retry_requested": requested,
+                "retry_downloaded": 0,
+                "retry_failed": len(claimed),
+                "error": str(exc),
+                "message": f"媒体重试失败：{exc}",
+            })
+
+    def start_media_retry(
+        targets: list[tuple[str, int]] | None,
+        requested: int,
+    ) -> dict[str, int | str]:
+        state.update({
+            "state": "retrying",
+            "retry_requested": requested,
+            "retry_downloaded": 0,
+            "retry_failed": 0,
+            "message": f"正在重试 {requested} 个失败媒体",
+        })
+        schedule(retry_failed_media(targets, requested))
+        return {"state": "retrying", "requested": requested}
+
     @app.get("/api/posts")
     def posts(q: str = "", author: str = "", media_type: str = "", date_from: str = "", date_to: str = "", sort: str = "published_at", direction: str = "desc", limit: int = Query(100, le=200), offset: int = 0, tag_id: int | None = Query(None, ge=1)):
         return store.list_posts(q, author, media_type, date_from, date_to, sort, direction, limit, offset, tag_id)
@@ -92,6 +149,31 @@ def create_app(settings: Settings) -> FastAPI:
     @app.get("/api/sync/failures")
     def sync_failures():
         return store.list_media_failures()
+
+    @app.post("/api/sync/failures/retry")
+    async def retry_all_sync_failures():
+        ensure_retry_available()
+        requested = store.count_media_failures()
+        if requested == 0:
+            return {"state": state.get("state", "idle"), "requested": 0}
+        return JSONResponse(
+            start_media_retry(None, requested),
+            status_code=status.HTTP_202_ACCEPTED,
+        )
+
+    @app.post("/api/sync/failures/{post_id}/{media_index}/retry")
+    async def retry_one_sync_failure(post_id: str, media_index: int):
+        ensure_retry_available()
+        requested = store.count_media_failures(post_id, media_index)
+        if requested == 0:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND,
+                "失败媒体记录不存在或已被处理",
+            )
+        return JSONResponse(
+            start_media_retry([(post_id, media_index)], requested),
+            status_code=status.HTTP_202_ACCEPTED,
+        )
 
     @app.get("/api/settings")
     def archive_settings():

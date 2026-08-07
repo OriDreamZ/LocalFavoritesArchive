@@ -1,6 +1,8 @@
 from fastapi.testclient import TestClient
 import time
 from local_favorites_archive.config import Settings
+from local_favorites_archive.models import MediaItem, Post
+from local_favorites_archive.storage import ArchiveStore
 from local_favorites_archive.web import create_app
 
 
@@ -27,6 +29,28 @@ def x_payload(*post_ids: str) -> dict:
     ]}}
 
 
+def add_failed_media(store: ArchiveStore, post_id: str) -> None:
+    from datetime import datetime, timezone
+
+    store.upsert_post(Post(
+        post_id=post_id,
+        url=f"https://x.com/alice/status/{post_id}",
+        text=f"post {post_id}",
+        author_id="author-1",
+        author_handle="alice",
+        author_name="Alice",
+        published_at=datetime(2024, 1, 2, tzinfo=timezone.utc),
+        collected_at=datetime(2024, 1, 2, tzinfo=timezone.utc),
+        raw={"id": post_id},
+        media=[MediaItem(0, "image", f"https://example.com/{post_id}.jpg")],
+    ))
+    with store._connect() as db:
+        db.execute(
+            "UPDATE media SET status='failed',error='timeout' WHERE post_id=?",
+            (post_id,),
+        )
+
+
 def test_local_api_and_ui(tmp_path):
     client = TestClient(create_app(Settings(archive_root=tmp_path)))
     assert client.get("/").status_code == 200
@@ -50,6 +74,79 @@ def test_local_api_and_ui(tmp_path):
     assert 'id="page-number"' in client.get("/").text
     assert 'id="jump-page"' in client.get("/").text
     assert client.get("/api/posts/count").json() == {"total": 0}
+
+
+def test_retry_all_failed_media_runs_only_claimed_failures(tmp_path, monkeypatch):
+    store = ArchiveStore(tmp_path)
+    add_failed_media(store, "1")
+    add_failed_media(store, "2")
+    captured = []
+
+    async def fake_download(self, targets=None):
+        captured.append(targets)
+        with self.store._connect() as db:
+            db.executemany(
+                "UPDATE media SET status='downloaded',error=NULL "
+                "WHERE post_id=? AND media_index=?",
+                targets,
+            )
+        return {"downloaded": len(targets), "failed": 0}
+
+    monkeypatch.setattr("local_favorites_archive.web.MediaDownloader.run", fake_download)
+    client = TestClient(create_app(Settings(archive_root=tmp_path)))
+
+    response = client.post("/api/sync/failures/retry")
+    assert response.status_code == 202
+    assert response.json() == {"state": "retrying", "requested": 2}
+    for _ in range(50):
+        if client.get("/api/sync/status").json()["state"] == "finished":
+            break
+        time.sleep(0.01)
+
+    assert captured == [[("1", 0), ("2", 0)]]
+    status = client.get("/api/sync/status").json()
+    assert status["retry_requested"] == 2
+    assert status["retry_downloaded"] == 2
+    assert status["retry_failed"] == 0
+    assert client.get("/api/sync/failures").json() == []
+
+
+def test_retry_single_failed_media_and_missing_target(tmp_path, monkeypatch):
+    store = ArchiveStore(tmp_path)
+    add_failed_media(store, "1")
+    add_failed_media(store, "2")
+    captured = []
+
+    async def fake_download(self, targets=None):
+        captured.append(targets)
+        return {"downloaded": 0, "failed": len(targets)}
+
+    monkeypatch.setattr("local_favorites_archive.web.MediaDownloader.run", fake_download)
+    client = TestClient(create_app(Settings(archive_root=tmp_path)))
+
+    response = client.post("/api/sync/failures/1/0/retry")
+    assert response.status_code == 202
+    assert response.json() == {"state": "retrying", "requested": 1}
+    for _ in range(50):
+        if client.get("/api/sync/status").json()["state"] == "finished":
+            break
+        time.sleep(0.01)
+
+    assert captured == [[("1", 0)]]
+    assert client.post("/api/sync/failures/missing/0/retry").status_code == 404
+
+
+def test_retry_rejects_active_sync_and_handles_empty_failures(tmp_path):
+    client = TestClient(create_app(Settings(archive_root=tmp_path)))
+
+    empty = client.post("/api/sync/failures/retry")
+    assert empty.status_code == 200
+    assert empty.json() == {"state": "idle", "requested": 0}
+
+    client.post("/api/ingest/start")
+    busy = client.post("/api/sync/failures/retry")
+    assert busy.status_code == 409
+    assert "正在执行" in busy.json()["detail"]
 
 
 def test_date_filters_have_visible_distinct_labels(tmp_path):
