@@ -294,7 +294,6 @@ async function loadTags() {
 
 async function refreshAfterTagChange() {
   await loadTags();
-  currentPage = 1;
   await Promise.all([loadOverview(), load()]);
 }
 

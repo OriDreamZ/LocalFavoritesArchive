@@ -174,6 +174,16 @@ def test_ui_script_uses_tag_workspace_instead_of_dialog(tmp_path):
     assert "loadOverview" in script
 
 
+def test_tag_refresh_preserves_current_page(tmp_path):
+    script = TestClient(create_app(Settings(archive_root=tmp_path))).get("/assets/app.js").text
+    function_body = script.split(
+        "async function refreshAfterTagChange()", 1
+    )[1].split("\n}", 1)[0]
+
+    assert "currentPage = 1" not in function_body
+    assert "await Promise.all([loadOverview(), load()])" in function_body
+
+
 def test_ui_script_renders_sync_failures_and_back_to_top(tmp_path):
     script = TestClient(create_app(Settings(archive_root=tmp_path))).get("/assets/app.js").text
 
