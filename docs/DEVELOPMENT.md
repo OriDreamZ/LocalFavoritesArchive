@@ -72,6 +72,8 @@ node --check src\local_favorites_archive\static\app.js
 
 ## 测试分层
 
+多标签必须测试交集、并集、重复 ID、旧参数及列表/计数一致性；扩展必须测试不刷新当前 Likes、DOM 与网络结果去重。局域网必须测试默认关闭、`--lan` 地址、完整管理权限和缺少客户端标记时的修改请求拒绝。
+
 - `test_collector.py`：X 响应解析、正文链接和媒体提取。
 - `test_storage.py`：数据库、查询、统计、去重、标签和删除。
 - `test_web.py`：API、同步状态和前端行为契约。

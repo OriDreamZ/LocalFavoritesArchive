@@ -274,3 +274,13 @@ LocalFavoritesArchive/
 本项目采用 **GNU General Public License v3.0 or later**，SPDX 标识为 `GPL-3.0-or-later`。
 
 你可以在 GPL v3 或后续版本条款下使用、研究、修改和再分发本项目。分发修改版本时必须遵守相应的源代码公开和许可证保留义务。完整且具有约束力的条款以根目录 [LICENSE](LICENSE) 中的 GNU 官方英文文本为准。
+
+## 多标签筛选与续接同步
+
+“我的收藏”支持同时选择多个标签，并选择“全部满足”（交集，`tag_mode=all`）或“任一满足”（并集，`tag_mode=any`）。筛选条件会写入地址栏，刷新后继续保留。详情参见[筛选与标签规范](docs/FILTERING-AND-TAGS.md)。
+
+Chrome 扩展默认“从当前位置继续”：不刷新当前 Likes 页面，先读取当前已经渲染的推文，再从当前位置向下翻页；“从头重新同步”用于刷新后完整回溯。已加载视频如果只有 `blob:` 地址，仍需等待后续网络响应获取真实媒体地址。详情参见 [Chrome 扩展采集规范](docs/CHROME-EXTENSION.md)。
+
+## 局域网访问
+
+默认只允许本机访问。如需同一局域网内其他设备访问并进行完整管理，启动 `local-favorites serve --lan`。局域网模式无身份验证，所有设备都可以删除和修改归档，只适合可信网络，禁止暴露到公网。详情参见[局域网访问规范](docs/LAN-ACCESS.md)。

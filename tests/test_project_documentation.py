@@ -12,6 +12,7 @@ EXPECTED_DOCUMENTS = {
     "DATA-STORAGE.md": ("# 数据存储规范", "## 备份与恢复"),
     "SECURITY-AND-LIMITATIONS.md": ("# 安全、隐私与限制", "## 已知限制"),
 }
+EXPECTED_NEW_DOCUMENTS = ("FILTERING-AND-TAGS.md", "CHROME-EXTENSION.md", "LAN-ACCESS.md")
 
 
 def test_project_declares_gpl_3_or_later() -> None:
@@ -39,6 +40,16 @@ def test_long_term_documents_are_present_and_chinese() -> None:
         content = (ROOT / "docs" / filename).read_text(encoding="utf-8")
         assert all(heading in content for heading in required_headings)
         assert any("\u4e00" <= character <= "\u9fff" for character in content)
+    for filename in EXPECTED_NEW_DOCUMENTS:
+        content = (ROOT / "docs" / filename).read_text(encoding="utf-8")
+        assert any("\u4e00" <= character <= "\u9fff" for character in content)
+
+
+def test_documents_describe_multi_tag_resume_and_lan_modes() -> None:
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    assert "tag_mode=all" in readme
+    assert "从当前位置继续" in readme and "从头重新同步" in readme
+    assert "--lan" in readme and "无身份验证" in readme
 
 
 def test_readme_covers_setup_usage_storage_and_license() -> None:
