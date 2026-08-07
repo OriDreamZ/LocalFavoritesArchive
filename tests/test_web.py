@@ -307,10 +307,26 @@ def test_tag_refresh_preserves_current_page_and_position(tmp_path):
     assert "renderPostTags(article.querySelector('.post-tags'), detail)" in function_body
     assert "await load()" not in function_body
     assert "removedTagId" in function_body
-    assert "$('tag-filter').value === String(removedTagId)" in function_body
+    assert "selectedTagIds.has(String(removedTagId))" in function_body
     assert "await refreshAfterTagChange()" in function_body
     assert "refreshPostTags(article, remove.dataset.tagId)" in script
     assert "refreshPostTags(article)" in script
+
+
+def test_favorites_exposes_multi_tag_filter_modes_and_url_state(tmp_path):
+    client = TestClient(create_app(Settings(archive_root=tmp_path)))
+    html = client.get("/").text
+    script = client.get("/assets/app.js").text
+
+    assert 'id="tag-filter"' in html
+    assert 'id="tag-filter-options"' in html
+    assert 'name="tag-mode"' in html
+    assert 'value="all"' in html and 'value="any"' in html
+    assert "selectedTagIds" in script
+    assert "params.append('tag_ids'" in script
+    assert "params.set('tag_mode'" in script
+    assert "restoreFiltersFromUrl" in script
+    assert "history.replaceState" in script
 
 
 def test_ui_script_renders_sync_failures_and_back_to_top(tmp_path):

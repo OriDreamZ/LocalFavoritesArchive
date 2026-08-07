@@ -106,6 +106,19 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
 #filters { display: grid; grid-template-columns: minmax(230px, 2fr) repeat(7, minmax(104px, 1fr)) auto; gap: 8px; margin-bottom: 24px; padding: 12px; border: 1px solid var(--line); border-radius: 7px; background: var(--paper); }
 #filters > label { display: block; min-width: 0; }
+.tag-filter { position: relative; min-width: 0; }
+.tag-filter summary { min-height: 42px; display: flex; align-items: center; padding: 9px 30px 9px 11px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--paper); cursor: pointer; font-size: 13px; list-style: none; }
+.tag-filter summary::-webkit-details-marker { display: none; }
+.tag-filter summary::after { content: "▾"; position: absolute; right: 11px; color: var(--muted); }
+.tag-filter-panel { position: absolute; z-index: 20; top: calc(100% + 6px); left: 0; width: min(320px, 86vw); padding: 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--paper); box-shadow: 0 10px 28px rgba(23, 42, 33, .14); }
+.tag-mode { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin: 0 0 8px; padding: 0; border: 0; }
+.tag-mode legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
+.tag-mode label { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 34px; border: 1px solid var(--line); border-radius: 5px; font-size: 12px; }
+.tag-mode input, .tag-filter-option input { width: 16px; min-height: 16px; accent-color: var(--green); }
+.tag-filter-options { max-height: 240px; overflow-y: auto; }
+.tag-filter-option { display: grid; grid-template-columns: 18px 8px minmax(0, 1fr) auto; align-items: center; gap: 7px; min-height: 36px; padding: 4px; font-size: 12px; }
+.tag-filter-swatch { width: 8px; height: 22px; border-radius: 2px; background: var(--tag-color); }
+.tag-filter-option small { color: var(--muted); }
 input, select { width: 100%; min-width: 0; min-height: 42px; padding: 9px 11px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--paper); color: var(--ink); }
 input::placeholder { color: #87938d; opacity: 1; }
 input:hover, select:hover { border-color: #aebcb4; }

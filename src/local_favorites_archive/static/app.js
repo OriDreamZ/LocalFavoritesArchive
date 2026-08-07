@@ -12,6 +12,7 @@ const WORKSPACES = {
 let currentPage = 1;
 let totalPages = 1;
 let allTags = [];
+const selectedTagIds = new Set();
 let syncState = {state: 'idle', media_failed: 0};
 let retrySubmitting = false;
 const selectedPostIds = new Set();
@@ -84,8 +85,31 @@ function filterParams() {
     date_from: $('from').value,
     date_to: $('to').value,
   });
-  if ($('tag-filter').value) params.set('tag_id', $('tag-filter').value);
+  selectedTagIds.forEach(tagId => params.append('tag_ids', tagId));
+  if (selectedTagIds.size) params.set('tag_mode', document.querySelector('[name="tag-mode"]:checked').value);
   return params;
+}
+
+function updateFilterUrl() {
+  const params = filterParams();
+  params.set('sort', $('sort').value);
+  params.set('direction', $('direction').value);
+  params.set('page_size', $('page-size').value);
+  const query = params.toString();
+  history.replaceState(null, '', `${location.pathname}${query ? `?${query}` : ''}#favorites`);
+}
+
+function restoreFiltersFromUrl() {
+  const params = new URLSearchParams(location.search);
+  for (const [id, key] of [['q', 'q'], ['author', 'author'], ['media', 'media_type'], ['from', 'date_from'], ['to', 'date_to'], ['sort', 'sort'], ['direction', 'direction'], ['page-size', 'page_size']]) {
+    if (params.has(key)) $(id).value = params.get(key);
+  }
+  selectedTagIds.clear();
+  params.getAll('tag_ids').forEach(tagId => selectedTagIds.add(tagId));
+  const mode = params.get('tag_mode');
+  const modeInput = document.querySelector(`[name="tag-mode"][value="${mode}"]`);
+  if (modeInput) modeInput.checked = true;
+  for (const input of [$('from'), $('to')]) syncDateInputState(input);
 }
 
 function syncDateInputState(input) {
@@ -289,11 +313,18 @@ function renderTagManager() {
     </div>`).join('') : '<div class="empty-tag-list">还没有标签</div>';
 }
 
+function renderTagFilter() {
+  $('tag-filter-options').innerHTML = allTags.length ? allTags.map(tag => `
+    <label class="tag-filter-option"><input type="checkbox" value="${tag.id}" ${selectedTagIds.has(String(tag.id)) ? 'checked' : ''}><span class="tag-filter-swatch" style="--tag-color:${safeColor(tag.color)}"></span><span>${esc(tag.name)}</span><small>${formatNumber(tag.post_count)}</small></label>`).join('') : '<span class="muted">还没有标签</span>';
+  const selectedNames = allTags.filter(tag => selectedTagIds.has(String(tag.id))).map(tag => tag.name);
+  $('tag-filter-summary').textContent = selectedNames.length ? `已选 ${formatNumber(selectedNames.length)} 个标签` : '全部标签';
+}
+
 async function loadTags() {
-  const selected = $('tag-filter').value;
   allTags = await api('/api/tags');
-  $('tag-filter').innerHTML = '<option value="">全部标签</option>' + allTags.map(tag => `<option value="${tag.id}">${esc(tag.name)} (${formatNumber(tag.post_count)})</option>`).join('');
-  if (allTags.some(tag => String(tag.id) === selected)) $('tag-filter').value = selected;
+  const validIds = new Set(allTags.map(tag => String(tag.id)));
+  [...selectedTagIds].forEach(tagId => { if (!validIds.has(tagId)) selectedTagIds.delete(tagId); });
+  renderTagFilter();
   $('nav-tags-count').textContent = formatNumber(allTags.length);
   renderTagManager();
 }
@@ -304,7 +335,7 @@ async function refreshAfterTagChange() {
 }
 
 async function refreshPostTags(article, removedTagId = '') {
-  if (removedTagId && $('tag-filter').value === String(removedTagId)) {
+  if (removedTagId && selectedTagIds.has(String(removedTagId))) {
     await refreshAfterTagChange();
     return;
   }
@@ -516,7 +547,12 @@ function zoomViewer(factor) {
   applyViewerTransform();
 }
 
-$('filters').addEventListener('submit', event => { event.preventDefault(); currentPage = 1; load(); });
+$('filters').addEventListener('submit', event => { event.preventDefault(); currentPage = 1; updateFilterUrl(); load(); });
+$('tag-filter-options').addEventListener('change', event => {
+  if (event.target.type !== 'checkbox') return;
+  if (event.target.checked) selectedTagIds.add(event.target.value); else selectedTagIds.delete(event.target.value);
+  renderTagFilter();
+});
 for (const input of [$('from'), $('to')]) {
   syncDateInputState(input);
   input.addEventListener('input', () => syncDateInputState(input));
@@ -711,6 +747,7 @@ document.addEventListener('keydown', event => {
     history.replaceState(null, '', '#overview');
   }
   activateWorkspace();
+  restoreFiltersFromUrl();
   try {
     await loadTags();
     await Promise.all([load(), loadOverview(), loadSyncFailures(), loadArchiveSettings()]);

@@ -72,7 +72,7 @@
         <label class="search-field"><span class="sr-only">搜索</span><input id="q" placeholder="搜索文字、作者或关键词"></label>
         <label><span class="sr-only">作者</span><input id="author" placeholder="所有作者"></label>
         <label><span class="sr-only">媒体类型</span><select id="media"><option value="">所有媒体</option><option value="image">图片</option><option value="video">视频</option><option value="text">纯文本</option></select></label>
-        <label><span class="sr-only">标签</span><select id="tag-filter" aria-label="标签筛选"><option value="">全部标签</option></select></label>
+        <details id="tag-filter" class="tag-filter"><summary id="tag-filter-summary">全部标签</summary><div class="tag-filter-panel"><fieldset class="tag-mode"><legend>标签关系</legend><label><input type="radio" name="tag-mode" value="all" checked>全部满足</label><label><input type="radio" name="tag-mode" value="any">任一满足</label></fieldset><div id="tag-filter-options" class="tag-filter-options" aria-label="标签筛选选项"></div></div></details>
         <label class="filter-date"><span>起始日期</span><span class="date-control"><input id="from" type="date" aria-label="起始日期"><span class="date-placeholder" aria-hidden="true">年/月/日</span></span></label>
         <label class="filter-date"><span>截至日期</span><span class="date-control"><input id="to" type="date" aria-label="截至日期"><span class="date-placeholder" aria-hidden="true">年/月/日</span></span></label>
         <label><span class="sr-only">排序字段</span><select id="sort"><option value="published_at">发布时间</option><option value="collected_at">收藏时间</option><option value="author">作者名称</option></select></label>
