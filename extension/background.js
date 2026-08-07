@@ -59,6 +59,15 @@ async function finishOnce(message) {
   pendingLikes.clear();
   await saveState({ running: false, tabId: null, message });
   if (tabId !== null) {
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        func: () => {
+          if (globalThis.__localFavoritesArchiveScrollTimer) clearInterval(globalThis.__localFavoritesArchiveScrollTimer);
+          globalThis.__localFavoritesArchiveScrollTimer = null;
+        }
+      });
+    } catch (_) {}
     try { await chrome.debugger.detach({ tabId }); } catch (_) {}
   }
   try { await fetch(`${LOCAL_API}/api/ingest/finish`, { method: "POST", headers: { "X-Local-Favorites-Client": "extension" } }); } catch (_) {}
@@ -67,6 +76,29 @@ async function finishOnce(message) {
 async function finish(message) {
   if (!finishPromise) finishPromise = finishOnce(message).finally(() => { finishPromise = null; });
   return finishPromise;
+}
+
+async function installScrollDriver(tabId) {
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    func: () => {
+      if (globalThis.__localFavoritesArchiveScrollTimer) clearInterval(globalThis.__localFavoritesArchiveScrollTimer);
+      let unchanged = 0;
+      let previousHeight = document.body.scrollHeight;
+      globalThis.__localFavoritesArchiveScrollTimer = setInterval(() => {
+        window.scrollBy({ top: Math.max(window.innerHeight * 0.85, 600), behavior: "smooth" });
+        const height = document.body.scrollHeight;
+        const bottom = window.scrollY + window.innerHeight >= height - 20;
+        unchanged = bottom && height === previousHeight ? unchanged + 1 : 0;
+        previousHeight = height;
+        if (unchanged >= 6) {
+          clearInterval(globalThis.__localFavoritesArchiveScrollTimer);
+          globalThis.__localFavoritesArchiveScrollTimer = null;
+          chrome.runtime.sendMessage({ type: "auto-finished" });
+        }
+      }, 1800);
+    }
+  });
 }
 
 async function start(tabId, url) {
@@ -96,12 +128,15 @@ async function start(tabId, url) {
   await chrome.debugger.sendCommand({ tabId }, "Network.enable");
   if (targetUrl === url) await chrome.tabs.reload(tabId);
   else await chrome.tabs.update(tabId, { url: targetUrl });
+  await new Promise(resolve => setTimeout(resolve, 2500));
+  await installScrollDriver(tabId);
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   (async () => {
     if (message.type === "start") { await start(message.tabId, message.url); return { ok: true }; }
     if (message.type === "stop") { await finish("已手动停止，正在完成下载"); return { ok: true }; }
+    if (message.type === "auto-finished") { await finish("已到达 Likes 页面末尾，正在完成下载"); return { ok: true }; }
     if (message.type === "status") return { ok: true, state: session };
     return { ok: false, error: "未知操作" };
   })().then(sendResponse).catch(error => sendResponse({ ok: false, error: error.message }));

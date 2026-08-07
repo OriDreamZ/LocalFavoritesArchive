@@ -39,6 +39,8 @@ def test_extension_only_uses_refreshed_network_collection():
     assert "/api/ingest/dom-posts" not in background
     assert "collectRenderedPosts" not in background
     assert "dom-batch" not in background
+    assert "window.scrollBy" in background
+    assert "auto-finished" in background
     assert "从当前位置继续" not in html
     assert '"X-Local-Favorites-Client": "extension"' in background
 
