@@ -45,6 +45,19 @@ def test_extension_only_uses_refreshed_network_collection():
     assert '"X-Local-Favorites-Client": "extension"' in background
 
 
+def test_extension_persists_manual_scroll_speed_setting():
+    background = Path("extension/background.js").read_text(encoding="utf-8")
+    popup = Path("extension/popup.html").read_text(encoding="utf-8")
+    popup_source = Path("extension/popup.js").read_text(encoding="utf-8")
+
+    assert 'id="scroll-speed"' in popup
+    assert 'set-scroll-speed' in popup_source
+    assert 'scroll-speed' in popup_source
+    assert 'message.type === "set-scroll-speed"' in background
+    assert 'scrollIntervalMs' in background
+    assert 'setInterval' in background
+
+
 def test_cli_exposes_explicit_lan_switch():
     source = Path("src/local_favorites_archive/cli.py").read_text(encoding="utf-8")
     assert '"--lan"' in source

@@ -1,6 +1,17 @@
 const LOCAL_API = "http://127.0.0.1:8765";
 let session = { running: false, tabId: null, discovered: 0, added: 0, batches: 0, message: "等待开始" };
 const pendingLikes = new Map();
+let scrollIntervalMs = 1800;
+
+async function setScrollSpeed(value) {
+  scrollIntervalMs = Math.min(5000, Math.max(500, Math.round(Number(value) / 100) * 100));
+  await chrome.storage.local.set({ scrollIntervalMs });
+  await saveState({ scrollIntervalMs });
+  if (session.running && session.tabId !== null) await installScrollDriver(session.tabId, scrollIntervalMs);
+  return scrollIntervalMs;
+}
+
+chrome.storage.local.get({ scrollIntervalMs: 1800 }).then(({ scrollIntervalMs: value }) => setScrollSpeed(value));
 let finishPromise = null;
 
 async function saveState(patch = {}) {
@@ -78,7 +89,7 @@ async function finish(message) {
   return finishPromise;
 }
 
-async function installScrollDriver(tabId) {
+async function installScrollDriver(tabId, intervalMs) {
   await chrome.scripting.executeScript({
     target: { tabId },
     func: () => {
@@ -96,7 +107,7 @@ async function installScrollDriver(tabId) {
           globalThis.__localFavoritesArchiveScrollTimer = null;
           chrome.runtime.sendMessage({ type: "auto-finished" });
         }
-      }, 1800);
+      }, intervalMs);
     }
   });
 }
@@ -129,7 +140,7 @@ async function start(tabId, url) {
   if (targetUrl === url) await chrome.tabs.reload(tabId);
   else await chrome.tabs.update(tabId, { url: targetUrl });
   await new Promise(resolve => setTimeout(resolve, 2500));
-  await installScrollDriver(tabId);
+  await installScrollDriver(tabId, scrollIntervalMs);
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -137,7 +148,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === "start") { await start(message.tabId, message.url); return { ok: true }; }
     if (message.type === "stop") { await finish("已手动停止，正在完成下载"); return { ok: true }; }
     if (message.type === "auto-finished") { await finish("已到达 Likes 页面末尾，正在完成下载"); return { ok: true }; }
-    if (message.type === "status") return { ok: true, state: session };
+    if (message.type === "set-scroll-speed") return { ok: true, scrollIntervalMs: await setScrollSpeed(message.value) };
+    if (message.type === "status") return { ok: true, state: { ...session, scrollIntervalMs } };
     return { ok: false, error: "未知操作" };
   })().then(sendResponse).catch(error => sendResponse({ ok: false, error: error.message }));
   return true;
