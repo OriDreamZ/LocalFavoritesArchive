@@ -163,11 +163,16 @@ def post_from_dom_payload(value: dict[str, Any]) -> Post | None:
         if isinstance(link, str) and link.startswith(("https://", "http://"))
     ]
     media = []
-    for item in value.get("media") or []:
+    for index, item in enumerate(value.get("media") or []):
         source = str(item.get("source_url") or "")
         kind = str(item.get("kind") or "")
         if kind in {"image", "video"} and source.startswith(("https://", "http://")):
-            media.append(MediaItem(len(media), kind, source, item.get("mime_type")))
+            is_video_thumbnail = "amplify_video_thumb" in source
+            media.append(MediaItem(
+                index, "video" if is_video_thumbnail else kind, source,
+                "video/thumbnail" if is_video_thumbnail else item.get("mime_type"),
+                status="deferred" if is_video_thumbnail else "queued",
+            ))
     return Post(
         post_id=post_id, url=url, text=_normalize_whitespace(str(value.get("text") or "")),
         author_id=str(value.get("author_id") or ""), author_handle=handle,

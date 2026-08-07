@@ -184,10 +184,13 @@ class ArchiveStore:
                     VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(post_id,media_index) DO UPDATE SET
                     kind=CASE WHEN media.status='downloaded' THEN media.kind ELSE excluded.kind END,
                     source_url=CASE WHEN media.status='downloaded' THEN media.source_url ELSE excluded.source_url END,
+                    local_path=CASE WHEN media.status='downloaded' THEN media.local_path ELSE excluded.local_path END,
                     mime_type=CASE WHEN media.status='downloaded' THEN media.mime_type ELSE excluded.mime_type END,
                     width=CASE WHEN media.status='downloaded' THEN media.width ELSE excluded.width END,
                     height=CASE WHEN media.status='downloaded' THEN media.height ELSE excluded.height END,
-                    duration_ms=CASE WHEN media.status='downloaded' THEN media.duration_ms ELSE excluded.duration_ms END""",
+                    duration_ms=CASE WHEN media.status='downloaded' THEN media.duration_ms ELSE excluded.duration_ms END,
+                    status=CASE WHEN media.status='downloaded' THEN media.status ELSE excluded.status END,
+                    error=CASE WHEN media.status='downloaded' THEN media.error ELSE excluded.error END""",
                     (post.post_id, item.index, item.kind, item.source_url, local_path, item.mime_type, item.width, item.height, item.duration_ms, item.status, item.error))
         return not exists
 

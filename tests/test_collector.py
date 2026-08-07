@@ -142,3 +142,18 @@ def test_dom_post_ignores_blob_media_and_preserves_supported_fields():
     assert post.post_id == "123"
     assert post.links[0].expanded_url == "https://example.com/page"
     assert [item.source_url for item in post.media] == ["https://pbs.twimg.com/media/a.jpg"]
+
+
+def test_dom_video_thumbnail_is_deferred_video_and_keeps_media_index():
+    post = post_from_dom_payload({
+        "post_id": "124", "text": "video", "author_handle": "alice",
+        "url": "https://x.com/alice/status/124",
+        "media": [
+            {"kind": "image", "source_url": "https://pbs.twimg.com/amplify_video_thumb/1/img/a.jpg"},
+            {"kind": "image", "source_url": "https://pbs.twimg.com/media/b.jpg"},
+        ],
+    })
+    assert [(item.index, item.kind, item.status, item.mime_type) for item in post.media] == [
+        (0, "video", "deferred", "video/thumbnail"),
+        (1, "image", "queued", None),
+    ]
