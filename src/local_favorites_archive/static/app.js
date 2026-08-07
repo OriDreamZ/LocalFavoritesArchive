@@ -292,9 +292,25 @@ async function loadTags() {
   renderTagManager();
 }
 
-async function refreshAfterTagChange() {
+async function refreshAfterTagChange(anchorPostId = '') {
+  const scrollPosition = window.scrollY;
+  const anchor = anchorPostId
+    ? [...document.querySelectorAll('.post')].find(card => card.dataset.id === anchorPostId)
+    : null;
+  const anchorTop = anchor?.getBoundingClientRect().top;
   await loadTags();
   await Promise.all([loadOverview(), load()]);
+  const refreshedAnchor = anchorPostId
+    ? [...document.querySelectorAll('.post')].find(card => card.dataset.id === anchorPostId)
+    : null;
+  if (refreshedAnchor && anchorTop !== undefined) {
+    window.scrollBy({
+      top: refreshedAnchor.getBoundingClientRect().top - anchorTop,
+      behavior: 'auto',
+    });
+  } else {
+    window.scrollTo({top: scrollPosition, behavior: 'auto'});
+  }
 }
 
 async function loadSyncFailures() {
@@ -570,7 +586,7 @@ $('posts').addEventListener('click', async event => {
     const remove = event.target.closest('.tag-remove');
     if (remove) {
       await api(`/api/posts/${article.dataset.id}/tags/${remove.dataset.tagId}`, {method: 'DELETE'});
-      await refreshAfterTagChange();
+      await refreshAfterTagChange(article.dataset.id);
       return;
     }
     const add = event.target.closest('.tag-add');
@@ -578,7 +594,7 @@ $('posts').addEventListener('click', async event => {
       const tagId = add.closest('.tag-assignment').querySelector('.tag-select').value;
       if (!tagId) return;
       await api(`/api/posts/${article.dataset.id}/tags/${tagId}`, {method: 'POST'});
-      await refreshAfterTagChange();
+      await refreshAfterTagChange(article.dataset.id);
     }
   } catch (error) {
     $('posts').insertAdjacentHTML('afterbegin', `<div class="empty">标签操作失败：${esc(error.message)}</div>`);
