@@ -309,6 +309,65 @@ class ArchiveStore:
             "monthly_additions": [{"month": month, "count": monthly_counts.get(month, 0)} for month in months],
         }
 
+    def count_media_failures(
+        self,
+        post_id: str | None = None,
+        media_index: int | None = None,
+    ) -> int:
+        where = ["status='failed'"]
+        args: list[Any] = []
+        if post_id is not None:
+            where.append("post_id=?")
+            args.append(post_id)
+        if media_index is not None:
+            where.append("media_index=?")
+            args.append(media_index)
+        with self._connect() as db:
+            return db.execute(
+                f"SELECT COUNT(*) FROM media WHERE {' AND '.join(where)}",
+                args,
+            ).fetchone()[0]
+
+    def claim_failed_media(
+        self,
+        targets: list[tuple[str, int]] | None = None,
+    ) -> list[tuple[str, int]]:
+        with self._connect() as db:
+            if targets is None:
+                rows = db.execute(
+                    "SELECT post_id,media_index FROM media "
+                    "WHERE status='failed' ORDER BY post_id,media_index"
+                ).fetchall()
+            else:
+                rows = []
+                for post_id, media_index in dict.fromkeys(targets):
+                    row = db.execute(
+                        "SELECT post_id,media_index FROM media "
+                        "WHERE post_id=? AND media_index=? AND status='failed'",
+                        (post_id, media_index),
+                    ).fetchone()
+                    if row:
+                        rows.append(row)
+            claimed = [(row["post_id"], row["media_index"]) for row in rows]
+            db.executemany(
+                "UPDATE media SET status='queued',error=NULL "
+                "WHERE post_id=? AND media_index=? AND status='failed'",
+                claimed,
+            )
+        return claimed
+
+    def restore_claimed_media_failures(
+        self,
+        targets: list[tuple[str, int]],
+        error: str,
+    ) -> None:
+        with self._connect() as db:
+            db.executemany(
+                "UPDATE media SET status='failed',error=? "
+                "WHERE post_id=? AND media_index=? AND status='queued'",
+                [(error[:500], post_id, media_index) for post_id, media_index in targets],
+            )
+
     def list_media_failures(self, limit: int = 200) -> list[dict[str, Any]]:
         with self._connect() as db:
             rows = db.execute("""

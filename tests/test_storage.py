@@ -210,6 +210,65 @@ def test_list_media_failures_joins_post_context(tmp_path):
     }]
 
 
+def test_claim_failed_media_only_queues_requested_failures(tmp_path):
+    store = ArchiveStore(tmp_path)
+    store.upsert_post(sample_post(post_id="1"))
+    store.upsert_post(sample_post(post_id="2"))
+    store.upsert_post(sample_post(post_id="3"))
+    with store._connect() as db:
+        db.execute("UPDATE media SET status='failed', error='first' WHERE post_id='1'")
+        db.execute("UPDATE media SET status='failed', error='second' WHERE post_id='2'")
+        db.execute("UPDATE media SET status='queued' WHERE post_id='3'")
+
+    claimed = store.claim_failed_media([("1", 0), ("3", 0)])
+
+    assert claimed == [("1", 0)]
+    with store._connect() as db:
+        states = {
+            row["post_id"]: (row["status"], row["error"])
+            for row in db.execute("SELECT post_id,status,error FROM media")
+        }
+    assert states == {
+        "1": ("queued", None),
+        "2": ("failed", "second"),
+        "3": ("queued", None),
+    }
+
+
+def test_claim_all_failed_media_is_not_limited_to_failure_list_page(tmp_path):
+    store = ArchiveStore(tmp_path)
+    for index in range(205):
+        store.upsert_post(sample_post(post_id=str(index)))
+    with store._connect() as db:
+        db.execute("UPDATE media SET status='failed', error='timeout'")
+
+    assert store.count_media_failures() == 205
+    assert len(store.list_media_failures()) == 200
+    assert len(store.claim_failed_media()) == 205
+    assert store.count_media_failures() == 0
+
+
+def test_restore_claimed_media_failures_only_changes_queued_targets(tmp_path):
+    store = ArchiveStore(tmp_path)
+    store.upsert_post(sample_post(post_id="1"))
+    store.upsert_post(sample_post(post_id="2"))
+    with store._connect() as db:
+        db.execute("UPDATE media SET status='queued' WHERE post_id='1'")
+        db.execute("UPDATE media SET status='downloaded' WHERE post_id='2'")
+
+    store.restore_claimed_media_failures([("1", 0), ("2", 0)], "task failed")
+
+    with store._connect() as db:
+        states = {
+            row["post_id"]: (row["status"], row["error"])
+            for row in db.execute("SELECT post_id,status,error FROM media")
+        }
+    assert states == {
+        "1": ("failed", "task failed"),
+        "2": ("downloaded", None),
+    }
+
+
 def test_delete_posts_removes_records_search_rows_and_owned_files(tmp_path):
     store = ArchiveStore(tmp_path)
     links = [PostLink(0, "example.com", "https://example.com", "https://t.co/link")]
