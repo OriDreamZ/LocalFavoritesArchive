@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+from datetime import datetime, timezone
 import time
 from local_favorites_archive.config import Settings
 from local_favorites_archive.models import MediaItem, Post
@@ -564,6 +565,35 @@ def test_tag_api_manages_assignments_and_filters_posts(tmp_path):
     assert client.delete(f"/api/posts/99/tags/{tag['id']}").status_code == 204
     assert client.delete(f"/api/tags/{tag['id']}").status_code == 204
     assert client.get("/api/tags").json() == []
+
+
+def test_multi_tag_query_parameters_filter_posts_and_count_consistently(tmp_path):
+    store = ArchiveStore(tmp_path)
+    for post_id in ("1", "2", "3"):
+        store.upsert_post(Post(
+            post_id=post_id,
+            url=f"https://x.com/alice/status/{post_id}",
+            text=f"post {post_id}",
+            author_id="author-1",
+            author_handle="alice",
+            author_name="Alice",
+            published_at=None,
+            collected_at=datetime.now(timezone.utc),
+            raw={"id": post_id},
+        ))
+    first = store.create_tag("第一标签", "#2563eb")
+    second = store.create_tag("第二标签", "#16a34a")
+    store.assign_tag("1", first["id"])
+    store.assign_tag("1", second["id"])
+    store.assign_tag("2", first["id"])
+    store.assign_tag("3", second["id"])
+    client = TestClient(create_app(Settings(archive_root=tmp_path)))
+    query = f"tag_ids={first['id']}&tag_ids={second['id']}&tag_mode=all"
+
+    assert [item["post_id"] for item in client.get(f"/api/posts?{query}").json()] == ["1"]
+    assert client.get(f"/api/posts/count?{query}").json() == {"total": 1}
+    union = client.get(f"/api/posts?tag_ids={first['id']}&tag_ids={second['id']}&tag_mode=any")
+    assert {item["post_id"] for item in union.json()} == {"1", "2", "3"}
 
 
 def test_tag_api_validates_input_and_missing_records(tmp_path):

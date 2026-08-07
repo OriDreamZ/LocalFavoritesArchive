@@ -186,7 +186,17 @@ class ArchiveStore:
                     (post.post_id, item.index, item.kind, item.source_url, local_path, item.mime_type, item.width, item.height, item.duration_ms, item.status, item.error))
         return not exists
 
-    def _post_filters(self, query: str, author: str, media_type: str, date_from: str, date_to: str, tag_id: int | None = None) -> tuple[str, list[Any]]:
+    def _post_filters(
+        self,
+        query: str,
+        author: str,
+        media_type: str,
+        date_from: str,
+        date_to: str,
+        tag_id: int | None = None,
+        tag_ids: list[int] | None = None,
+        tag_mode: str = "any",
+    ) -> tuple[str, list[Any]]:
         where, args = ["1=1"], []
         if query:
             where.append("p.post_id IN (SELECT post_id FROM posts_fts WHERE posts_fts MATCH ?)"); args.append(query + "*")
@@ -198,16 +208,28 @@ class ArchiveStore:
             where.append("EXISTS (SELECT 1 FROM media m WHERE m.post_id=p.post_id AND m.kind=? AND m.status='downloaded')"); args.append(media_type)
         if date_from: where.append("p.published_at >= ?"); args.append(date_from)
         if date_to: where.append("p.published_at <= ?"); args.append(date_to)
-        if tag_id is not None:
-            where.append("EXISTS (SELECT 1 FROM post_tags pt WHERE pt.post_id=p.post_id AND pt.tag_id=?)"); args.append(tag_id)
+        selected_tags = list(dict.fromkeys(tag_ids or ([tag_id] if tag_id is not None else [])))
+        if selected_tags:
+            if tag_mode not in {"all", "any"}:
+                raise ValueError("tag mode must be 'all' or 'any'")
+            if tag_mode == "all":
+                for selected_tag in selected_tags:
+                    where.append("EXISTS (SELECT 1 FROM post_tags pt WHERE pt.post_id=p.post_id AND pt.tag_id=?)")
+                    args.append(selected_tag)
+            else:
+                placeholders = ",".join("?" for _ in selected_tags)
+                where.append(
+                    f"EXISTS (SELECT 1 FROM post_tags pt WHERE pt.post_id=p.post_id AND pt.tag_id IN ({placeholders}))"
+                )
+                args.extend(selected_tags)
         return " AND ".join(where), args
 
-    def count_posts(self, query: str = "", author: str = "", media_type: str = "", date_from: str = "", date_to: str = "", tag_id: int | None = None) -> int:
-        where, args = self._post_filters(query, author, media_type, date_from, date_to, tag_id)
+    def count_posts(self, query: str = "", author: str = "", media_type: str = "", date_from: str = "", date_to: str = "", tag_id: int | None = None, tag_ids: list[int] | None = None, tag_mode: str = "any") -> int:
+        where, args = self._post_filters(query, author, media_type, date_from, date_to, tag_id, tag_ids, tag_mode)
         with self._connect() as db:
             return db.execute(f"SELECT COUNT(*) FROM posts p WHERE {where}", args).fetchone()[0]
 
-    def list_posts(self, query: str = "", author: str = "", media_type: str = "", date_from: str = "", date_to: str = "", sort: str = "published_at", direction: str = "desc", limit: int = 100, offset: int = 0, tag_id: int | None = None) -> list[dict[str, Any]]:
+    def list_posts(self, query: str = "", author: str = "", media_type: str = "", date_from: str = "", date_to: str = "", sort: str = "published_at", direction: str = "desc", limit: int = 100, offset: int = 0, tag_id: int | None = None, tag_ids: list[int] | None = None, tag_mode: str = "any") -> list[dict[str, Any]]:
         order_column = {
             "published_at": "p.published_at",
             "collected_at": "p.collected_at",
@@ -215,7 +237,7 @@ class ArchiveStore:
         }.get(sort, "p.published_at")
         order_direction = "ASC" if direction.lower() == "asc" else "DESC"
         order = f"{order_column} {order_direction}, p.post_id {order_direction}"
-        where, args = self._post_filters(query, author, media_type, date_from, date_to, tag_id)
+        where, args = self._post_filters(query, author, media_type, date_from, date_to, tag_id, tag_ids, tag_mode)
         sql = f"SELECT p.*, (SELECT COUNT(*) FROM media m WHERE m.post_id=p.post_id) AS media_count FROM posts p WHERE {where} ORDER BY {order} LIMIT ? OFFSET ?"
         args.extend([limit, offset])
         with self._connect() as db:

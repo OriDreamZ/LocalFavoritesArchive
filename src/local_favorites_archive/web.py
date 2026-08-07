@@ -131,12 +131,12 @@ def create_app(settings: Settings) -> FastAPI:
         return {"state": "retrying", "requested": requested}
 
     @app.get("/api/posts")
-    def posts(q: str = "", author: str = "", media_type: str = "", date_from: str = "", date_to: str = "", sort: str = "published_at", direction: str = "desc", limit: int = Query(100, le=200), offset: int = 0, tag_id: int | None = Query(None, ge=1)):
-        return store.list_posts(q, author, media_type, date_from, date_to, sort, direction, limit, offset, tag_id)
+    def posts(q: str = "", author: str = "", media_type: str = "", date_from: str = "", date_to: str = "", sort: str = "published_at", direction: str = "desc", limit: int = Query(100, le=200), offset: int = 0, tag_id: int | None = Query(None, ge=1), tag_ids: list[int] = Query(default=[]), tag_mode: str = Query("any", pattern="^(all|any)$")):
+        return store.list_posts(q, author, media_type, date_from, date_to, sort, direction, limit, offset, tag_id, tag_ids, tag_mode)
 
     @app.get("/api/posts/count")
-    def post_count(q: str = "", author: str = "", media_type: str = "", date_from: str = "", date_to: str = "", tag_id: int | None = Query(None, ge=1)):
-        return {"total": store.count_posts(q, author, media_type, date_from, date_to, tag_id)}
+    def post_count(q: str = "", author: str = "", media_type: str = "", date_from: str = "", date_to: str = "", tag_id: int | None = Query(None, ge=1), tag_ids: list[int] = Query(default=[]), tag_mode: str = Query("any", pattern="^(all|any)$")):
+        return {"total": store.count_posts(q, author, media_type, date_from, date_to, tag_id, tag_ids, tag_mode)}
 
     @app.delete("/api/posts")
     def delete_posts(payload: DeletePostsPayload):

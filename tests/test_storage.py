@@ -131,6 +131,28 @@ def test_tags_can_be_managed_assigned_and_filtered(tmp_path):
     assert store.list_tags() == []
 
 
+def test_multi_tag_filters_support_intersection_union_and_legacy_id(tmp_path):
+    store = ArchiveStore(tmp_path)
+    for post_id in ("1", "2", "3"):
+        store.upsert_post(sample_post(post_id=post_id))
+    first = store.create_tag("第一标签", "#2563eb")
+    second = store.create_tag("第二标签", "#16a34a")
+    store.assign_tag("1", first["id"])
+    store.assign_tag("1", second["id"])
+    store.assign_tag("2", first["id"])
+    store.assign_tag("3", second["id"])
+
+    selected = [first["id"], second["id"], first["id"]]
+    assert [row["post_id"] for row in store.list_posts(tag_ids=selected, tag_mode="all")] == ["1"]
+    assert store.count_posts(tag_ids=selected, tag_mode="all") == 1
+    assert {row["post_id"] for row in store.list_posts(tag_ids=selected, tag_mode="any")} == {"1", "2", "3"}
+    assert store.count_posts(tag_ids=selected, tag_mode="any") == 3
+    assert {row["post_id"] for row in store.list_posts(tag_id=first["id"])} == {"1", "2"}
+
+    with pytest.raises(ValueError, match="tag mode"):
+        store.list_posts(tag_ids=selected, tag_mode="invalid")
+
+
 def test_tag_names_are_unique_case_insensitively(tmp_path):
     store = ArchiveStore(tmp_path)
     store.create_tag("Read Later", "#2563eb")
