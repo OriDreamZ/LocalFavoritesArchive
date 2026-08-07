@@ -40,3 +40,26 @@ def test_long_term_documents_are_present_and_chinese() -> None:
         content = (ROOT / "docs" / filename).read_text(encoding="utf-8")
         assert all(heading in content for heading in required_headings)
         assert any("\u4e00" <= character <= "\u9fff" for character in content)
+
+
+def test_readme_covers_setup_usage_storage_and_license() -> None:
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    required_sections = (
+        "## 项目简介",
+        "## 功能概览",
+        "## 运行环境",
+        "## 安装",
+        "## 启动与初始化",
+        "## 加载 Chrome 扩展",
+        "## 同步收藏",
+        "## 本地浏览与管理",
+        "## 数据存储与备份",
+        "## 常见问题",
+        "## 开发与测试",
+        "## 项目结构",
+        "## 使用限制与免责声明",
+        "## 开源许可证",
+    )
+    assert all(section in readme for section in required_sections)
+    assert "GPL-3.0-or-later" in readme
+    assert "http://127.0.0.1:8765" in readme
