@@ -13,11 +13,32 @@ class MediaDownloader:
         self.store = store
         self.concurrency = concurrency
 
-    async def run(self) -> dict[str, int]:
-        with self.store._connect() as db:
-            rows = [dict(row) for row in db.execute("SELECT * FROM media WHERE status != 'downloaded' AND source_url != ''").fetchall()]
-        sem = asyncio.Semaphore(self.concurrency)
+    async def run(
+        self,
+        targets: list[tuple[str, int]] | None = None,
+    ) -> dict[str, int]:
         stats = {"downloaded": 0, "failed": 0}
+        if targets == []:
+            return stats
+        where = ["status != 'downloaded'", "source_url != ''"]
+        args: list[object] = []
+        if targets is not None:
+            unique_targets = list(dict.fromkeys(targets))
+            where.append(
+                "(" + " OR ".join(
+                    "(post_id=? AND media_index=?)" for _ in unique_targets
+                ) + ")"
+            )
+            args.extend(value for target in unique_targets for value in target)
+        with self.store._connect() as db:
+            rows = [
+                dict(row)
+                for row in db.execute(
+                    f"SELECT * FROM media WHERE {' AND '.join(where)}",
+                    args,
+                ).fetchall()
+            ]
+        sem = asyncio.Semaphore(self.concurrency)
         async with httpx.AsyncClient(follow_redirects=True, timeout=60, headers={"User-Agent": "Mozilla/5.0"}) as client:
             async def one(row):
                 async with sem:
