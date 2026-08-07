@@ -103,7 +103,6 @@ async function installScrollDriver(tabId, intervalMs) {
             const amount = Math.max(window.innerHeight * 0.85, 600);
             window.scrollBy({ top: amount, behavior: "smooth" });
             const root = document.scrollingElement || document.documentElement;
-            root.scrollTop += amount;
             const height = document.documentElement.scrollHeight;
             const bottom = window.scrollY + window.innerHeight >= height - 20 || root.scrollTop + root.clientHeight >= root.scrollHeight - 20;
             unchanged = bottom && height === previousHeight ? unchanged + 1 : 0;

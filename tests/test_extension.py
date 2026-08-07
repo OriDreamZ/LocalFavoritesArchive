@@ -42,6 +42,8 @@ def test_extension_only_uses_refreshed_network_collection():
     assert "window.scrollBy" in background
     assert "chrome.tabs.onUpdated" in background
     assert "scrollHeight" in background
+    assert "root.scrollTop += amount" not in background
+    assert 'behavior: "smooth"' in background
     assert "auto-finished" in background
     assert "从当前位置继续" not in html
     assert '"X-Local-Favorites-Client": "extension"' in background
