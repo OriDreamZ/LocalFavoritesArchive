@@ -1,4 +1,4 @@
-from local_favorites_archive.collector import normalize_post_text, pick_profile_path, posts_from_x_response
+from local_favorites_archive.collector import normalize_post_text, pick_profile_path, post_from_dom_payload, posts_from_x_response
 from local_favorites_archive.models import PostLink
 
 
@@ -126,3 +126,19 @@ def test_extracts_author_from_new_user_core_shape():
     assert post.author_handle == "new_handle"
     assert post.author_name == "New Name"
     assert post.url == "https://x.com/new_handle/status/99"
+
+
+def test_dom_post_ignores_blob_media_and_preserves_supported_fields():
+    post = post_from_dom_payload({
+        "post_id": "123", "text": "已加载正文", "author_handle": "alice", "author_name": "Alice",
+        "published_at": "2024-01-02T03:04:05.000Z", "url": "https://x.com/alice/status/123",
+        "links": ["https://example.com/page"],
+        "media": [
+            {"kind": "image", "source_url": "https://pbs.twimg.com/media/a.jpg"},
+            {"kind": "video", "source_url": "blob:https://x.com/abc"},
+        ],
+    })
+    assert post is not None
+    assert post.post_id == "123"
+    assert post.links[0].expanded_url == "https://example.com/page"
+    assert [item.source_url for item in post.media] == ["https://pbs.twimg.com/media/a.jpg"]

@@ -144,3 +144,34 @@ def posts_from_x_response(payload: Any) -> list[Post]:
             quote_id=legacy.get("quoted_status_id_str"), language=legacy.get("lang"), raw=node, media=media, links=links,
         )
     return list(posts.values())
+
+
+def post_from_dom_payload(value: dict[str, Any]) -> Post | None:
+    post_id = str(value.get("post_id") or "").strip()
+    handle = str(value.get("author_handle") or "").lstrip("@").strip()
+    url = str(value.get("url") or "").strip()
+    if not post_id or not handle or not url.startswith(("https://x.com/", "https://twitter.com/")):
+        return None
+    published_at = None
+    try:
+        published_at = datetime.fromisoformat(str(value.get("published_at") or "").replace("Z", "+00:00"))
+    except ValueError:
+        pass
+    links = [
+        PostLink(index, link, link, link)
+        for index, link in enumerate(value.get("links") or [])
+        if isinstance(link, str) and link.startswith(("https://", "http://"))
+    ]
+    media = []
+    for item in value.get("media") or []:
+        source = str(item.get("source_url") or "")
+        kind = str(item.get("kind") or "")
+        if kind in {"image", "video"} and source.startswith(("https://", "http://")):
+            media.append(MediaItem(len(media), kind, source, item.get("mime_type")))
+    return Post(
+        post_id=post_id, url=url, text=_normalize_whitespace(str(value.get("text") or "")),
+        author_id=str(value.get("author_id") or ""), author_handle=handle,
+        author_name=str(value.get("author_name") or handle), published_at=published_at,
+        collected_at=datetime.now(timezone.utc), raw={"source": "dom", "post": value},
+        media=media, links=links,
+    )

@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field, field_validator
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from .collector import posts_from_x_response
+from .collector import post_from_dom_payload, posts_from_x_response
 from .config import Settings
 from .downloader import MediaDownloader
 from .storage import ArchiveStore
@@ -243,6 +243,9 @@ def create_app(settings: Settings) -> FastAPI:
     @app.post("/api/ingest/x-response")
     async def ingest_x_response(payload: dict[str, Any]):
         posts = posts_from_x_response(payload)
+        return await ingest_posts(posts)
+
+    async def ingest_posts(posts):
         existing_streak = state.get("existing_streak", 0)
         added = 0
         for value in posts:
@@ -277,6 +280,14 @@ def create_app(settings: Settings) -> FastAPI:
             "stop_after_existing": threshold,
             "stop_requested": stop_requested,
         }
+
+    @app.post("/api/ingest/dom-posts")
+    async def ingest_dom_posts(payload: dict[str, Any]):
+        values = payload.get("posts")
+        if not isinstance(values, list) or len(values) > 100:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "推文批次必须为不超过 100 条的数组")
+        posts = [post for value in values if isinstance(value, dict) if (post := post_from_dom_payload(value))]
+        return await ingest_posts(posts)
 
     @app.post("/api/ingest/start")
     def ingest_start():
