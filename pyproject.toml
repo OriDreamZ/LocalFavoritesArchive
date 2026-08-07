@@ -1,11 +1,22 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77.0.3"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "local-favorites-archive"
 version = "0.1.0"
+description = "将当前账号可访问的 X 喜欢内容归档到本地并进行筛选管理"
+readme = "README.md"
+license = "GPL-3.0-or-later"
 requires-python = ">=3.11"
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Web Environment",
+  "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+  "Operating System :: Microsoft :: Windows",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+]
 dependencies = [
   "fastapi>=0.110",
   "uvicorn>=0.29",
