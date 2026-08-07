@@ -174,18 +174,20 @@ def test_ui_script_uses_tag_workspace_instead_of_dialog(tmp_path):
     assert "loadOverview" in script
 
 
-def test_tag_refresh_preserves_current_page(tmp_path):
+def test_tag_refresh_preserves_current_page_and_position(tmp_path):
     script = TestClient(create_app(Settings(archive_root=tmp_path))).get("/assets/app.js").text
     function_body = script.split(
-        "async function refreshAfterTagChange(", 1
+        "async function refreshPostTags(", 1
     )[1].split("\n}", 1)[0]
 
-    assert "currentPage = 1" not in function_body
-    assert "await Promise.all([loadOverview(), load()])" in function_body
-    assert "anchorPostId" in function_body
-    assert "getBoundingClientRect().top" in function_body
-    assert "window.scrollBy" in function_body
-    assert "refreshAfterTagChange(article.dataset.id)" in script
+    assert "await loadTags()" in function_body
+    assert "renderPostTags(article.querySelector('.post-tags'), detail)" in function_body
+    assert "await load()" not in function_body
+    assert "removedTagId" in function_body
+    assert "$('tag-filter').value === String(removedTagId)" in function_body
+    assert "await refreshAfterTagChange()" in function_body
+    assert "refreshPostTags(article, remove.dataset.tagId)" in script
+    assert "refreshPostTags(article)" in script
 
 
 def test_ui_script_renders_sync_failures_and_back_to_top(tmp_path):
