@@ -182,7 +182,12 @@ class ArchiveStore:
                 local_path = str(self.media_path(post.post_id, item.index, item.source_url).relative_to(self.root))
                 db.execute("""INSERT INTO media(post_id,media_index,kind,source_url,local_path,mime_type,width,height,duration_ms,status,error)
                     VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(post_id,media_index) DO UPDATE SET
-                    kind=excluded.kind,source_url=excluded.source_url,mime_type=excluded.mime_type,width=excluded.width,height=excluded.height,duration_ms=excluded.duration_ms""",
+                    kind=CASE WHEN media.status='downloaded' THEN media.kind ELSE excluded.kind END,
+                    source_url=CASE WHEN media.status='downloaded' THEN media.source_url ELSE excluded.source_url END,
+                    mime_type=CASE WHEN media.status='downloaded' THEN media.mime_type ELSE excluded.mime_type END,
+                    width=CASE WHEN media.status='downloaded' THEN media.width ELSE excluded.width END,
+                    height=CASE WHEN media.status='downloaded' THEN media.height ELSE excluded.height END,
+                    duration_ms=CASE WHEN media.status='downloaded' THEN media.duration_ms ELSE excluded.duration_ms END""",
                     (post.post_id, item.index, item.kind, item.source_url, local_path, item.mime_type, item.width, item.height, item.duration_ms, item.status, item.error))
         return not exists
 

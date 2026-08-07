@@ -48,6 +48,22 @@ def test_repeated_post_keeps_downloaded_media_state(tmp_path):
     assert media["checksum"] == "saved"
 
 
+def test_dom_refresh_cannot_relabel_downloaded_video_as_image(tmp_path):
+    store = ArchiveStore(tmp_path)
+    store.upsert_post(sample_post(post_id="42"))
+    with store._connect() as db:
+        db.execute("UPDATE media SET kind='video',source_url='https://video.twimg.com/a.mp4',mime_type='video/mp4',status='downloaded' WHERE post_id='42'")
+
+    refreshed = sample_post(post_id="42")
+    refreshed.media[0] = MediaItem(0, "image", "https://pbs.twimg.com/amplify_video_thumb/a.jpg")
+    store.upsert_post(refreshed)
+
+    media = store.get_post("42")["media"][0]
+    assert media["kind"] == "video"
+    assert media["source_url"] == "https://video.twimg.com/a.mp4"
+    assert media["mime_type"] == "video/mp4"
+
+
 def test_post_links_are_replaced_and_returned_in_order(tmp_path):
     store = ArchiveStore(tmp_path)
     first = [PostLink(0, "one.example", "https://one.example", "https://t.co/one")]
