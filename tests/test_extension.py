@@ -25,3 +25,20 @@ def test_extension_finishes_when_server_requests_threshold_stop():
     assert "finishPromise" in source
     assert "连续" in source
     assert "result.existing_streak" in source
+
+
+def test_extension_supports_resume_and_restart_collection_modes():
+    background = Path("extension/background.js").read_text(encoding="utf-8")
+    popup = Path("extension/popup.js").read_text(encoding="utf-8")
+    html = Path("extension/popup.html").read_text(encoding="utf-8")
+
+    assert 'start("resume")' in popup
+    assert 'start("restart")' in popup
+    assert 'id="restart"' in html
+    assert "mode === \"restart\"" in background
+    assert "if (targetUrl === url && mode === \"restart\")" in background
+    assert "/api/ingest/dom-posts" in background
+    assert 'article[data-testid="tweet"]' in background
+    assert '[data-testid="tweetText"]' in background
+    assert 'a[href*="/status/"]' in background
+    assert "blob:" in background

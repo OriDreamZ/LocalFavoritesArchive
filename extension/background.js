@@ -33,6 +33,22 @@ async function sendPayload(payload) {
   }
 }
 
+async function sendDomPosts(posts) {
+  if (!posts?.length) return;
+  const response = await fetch(`${LOCAL_API}/api/ingest/dom-posts`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ posts })
+  });
+  if (!response.ok) throw new Error(`本地服务返回 ${response.status}`);
+  const result = await response.json();
+  await saveState({
+    discovered: session.discovered + result.discovered,
+    added: session.added + result.new,
+    batches: session.batches + 1,
+    message: `已发现 ${session.discovered + result.discovered} 条，新增 ${session.added + result.new} 条`
+  });
+  if (result.stop_requested && session.running) await finish(`已连续读取 ${result.existing_streak} 条本地已有推文，正在下载媒体`);
+}
+
 chrome.debugger.onEvent.addListener(async (source, method, params) => {
   if (!session.running || source.tabId !== session.tabId) return;
   if (method === "Network.responseReceived") {
@@ -92,10 +108,26 @@ async function installScrollDriver(tabId) {
   await chrome.scripting.executeScript({
     target: { tabId },
     func: () => {
+      const collectRenderedPosts = () => [...document.querySelectorAll('article[data-testid="tweet"]')].map(article => {
+        const time = article.querySelector("time");
+        const statusLink = time?.closest('a[href*="/status/"]') || article.querySelector('a[href*="/status/"]');
+        const match = statusLink?.getAttribute("href")?.match(/^\/([^/]+)\/status\/(\d+)/);
+        if (!match || !time) return null;
+        const userName = article.querySelector('[data-testid="User-Name"]');
+        const links = [...article.querySelectorAll('[data-testid="tweetText"] a[href]')].map(link => link.href).filter(url => /^https?:/.test(url));
+        const media = [
+          ...[...article.querySelectorAll('[data-testid="tweetPhoto"] img[src]')].map(image => ({ kind: "image", source_url: image.src })),
+          ...[...article.querySelectorAll('video[src]')].filter(video => !video.src.startsWith("blob:")).map(video => ({ kind: "video", source_url: video.src }))
+        ];
+        return { post_id: match[2], url: `${location.origin}${statusLink.getAttribute("href").split("?")[0]}`, text: article.querySelector('[data-testid="tweetText"]')?.innerText || "", author_handle: match[1], author_name: userName?.querySelector("span")?.textContent || match[1], published_at: time.dateTime, links, media };
+      }).filter(Boolean);
+      const sendRenderedPosts = () => chrome.runtime.sendMessage({ type: "dom-batch", posts: collectRenderedPosts() });
       if (globalThis.__localFavoritesArchiveTimer) clearInterval(globalThis.__localFavoritesArchiveTimer);
       let unchanged = 0;
       let previousHeight = document.body.scrollHeight;
+      sendRenderedPosts();
       globalThis.__localFavoritesArchiveTimer = setInterval(() => {
+        sendRenderedPosts();
         window.scrollBy({ top: Math.max(window.innerHeight * 0.85, 600), behavior: "smooth" });
         const height = document.body.scrollHeight;
         const bottom = window.scrollY + window.innerHeight >= height - 20;
@@ -111,7 +143,7 @@ async function installScrollDriver(tabId) {
   });
 }
 
-async function start(tabId, url) {
+async function start(tabId, url, mode = "resume") {
   if (session.running) throw new Error("同步已经在运行");
   await fetch(`${LOCAL_API}/api/sync/status`).then(response => {
     if (!response.ok) throw new Error("本地归档服务未运行");
@@ -140,18 +172,22 @@ async function start(tabId, url) {
   }
   finishPromise = null;
   await chrome.debugger.attach({ tabId }, "1.3");
-  await saveState({ running: true, tabId, discovered: 0, added: 0, batches: 0, message: "正在重新加载 Likes 页面" });
+  await saveState({ running: true, tabId, discovered: 0, added: 0, batches: 0, message: mode === "restart" ? "正在从头加载 Likes 页面" : "正在从当前位置继续读取" });
   await debugCommand("Network.enable");
-  if (targetUrl === url) await chrome.tabs.reload(tabId);
-  else await chrome.tabs.update(tabId, { url: targetUrl });
-  await delay(2500);
+  if (targetUrl === url && mode === "restart") await chrome.tabs.reload(tabId);
+  else if (targetUrl !== url) await chrome.tabs.update(tabId, { url: targetUrl });
+  if (targetUrl !== url || mode === "restart") await delay(2500);
   await installScrollDriver(tabId);
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   (async () => {
     if (message.type === "start") {
-      await start(message.tabId, message.url);
+      await start(message.tabId, message.url, message.mode);
+      return { ok: true };
+    }
+    if (message.type === "dom-batch") {
+      await sendDomPosts(message.posts);
       return { ok: true };
     }
     if (message.type === "stop") {
