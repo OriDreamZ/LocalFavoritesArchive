@@ -131,6 +131,10 @@ local-favorites retry-media
 local-favorites retry-media --archive D:\XArchive
 ```
 
+同步期间的隐式重试：每批 Likes 响应和采集收尾都会触发一次媒体下载，因此同一次同步的后续批次可能再次尝试较早失败的媒体。同步完成后不会定时自动重试，服务重启不会自动重试。
+
+同步中心提供两种网页显式重试： “单条重试”只处理对应的 `failed` 媒体，“全部重试”处理归档中全部 `failed` 媒体，不受失败列表最多显示 200 条的限制。网页显式重试不会处理 `queued` 媒体；命令行 `local-favorites retry-media` 范围更广，会处理全部未下载媒体，包括 `failed` 和 `queued`。重试期间重复点击会被拒绝，来源失效或权限变化仍可能导致再次失败。
+
 ## 本地浏览与管理
 
 ### 总览

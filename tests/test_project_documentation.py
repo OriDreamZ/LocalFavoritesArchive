@@ -62,3 +62,22 @@ def test_readme_covers_setup_usage_storage_and_license() -> None:
     assert all(section in readme for section in required_sections)
     assert "GPL-3.0-or-later" in readme
     assert "http://127.0.0.1:8765" in readme
+
+
+def test_documentation_explains_media_retry_modes() -> None:
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    documents = {
+        filename: (ROOT / "docs" / filename).read_text(encoding="utf-8")
+        for filename in EXPECTED_DOCUMENTS
+    }
+    assert "同步期间的隐式重试" in readme
+    assert "服务重启不会自动重试" in readme
+    assert "全部重试" in readme and "单条重试" in readme
+    assert "failed" in readme and "queued" in readme
+    assert "local-favorites retry-media" in readme
+    assert "显式重试" in documents["FEATURES.md"]
+    assert "/api/sync/failures/retry" in documents["ARCHITECTURE.md"]
+    assert "全部重试" in documents["UI-DESIGN.md"]
+    assert "failed -> queued -> downloaded/failed" in documents["DATA-STORAGE.md"]
+    assert "重试不扩大" in documents["SECURITY-AND-LIMITATIONS.md"]
+    assert "重试接口" in documents["DEVELOPMENT.md"]

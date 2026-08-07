@@ -149,6 +149,31 @@ def test_retry_rejects_active_sync_and_handles_empty_failures(tmp_path):
     assert "正在执行" in busy.json()["detail"]
 
 
+def test_sync_center_exposes_explicit_media_retry_controls(tmp_path):
+    client = TestClient(create_app(Settings(archive_root=tmp_path)))
+    html = client.get("/").text
+    script = client.get("/assets/app.js").text
+
+    assert 'id="retry-all-failures"' in html
+    assert 'id="retry-failures-message"' in html
+    assert "data-retry-media" in script
+    assert "/api/sync/failures/retry" in script
+    assert "function retryMediaFailures" in script
+    assert "retrying" in script
+    assert "['starting', 'collecting', 'downloading', 'retrying']" in script
+    assert "媒体重试完成：成功" in script
+    assert "媒体重试失败：" in script
+    assert "loadSyncFailures()" in script
+    assert "loadOverview()" in script
+
+
+def test_api_errors_expose_status_for_retry_conflicts(tmp_path):
+    script = TestClient(create_app(Settings(archive_root=tmp_path))).get("/assets/app.js").text
+
+    assert "error.status = response.status" in script
+    assert "error.status === 404" in script
+
+
 def test_date_filters_have_visible_distinct_labels(tmp_path):
     client = TestClient(create_app(Settings(archive_root=tmp_path)))
     html = client.get("/").text

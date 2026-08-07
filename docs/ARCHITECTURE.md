@@ -53,6 +53,8 @@ flowchart LR
 
 ## 接口边界
 
+媒体显式重试使用 `POST /api/sync/failures/retry` 处理全部失败媒体，使用 `POST /api/sync/failures/{post_id}/{media_index}/retry` 处理单条失败媒体。Web 层通过下载锁和 `retrying` 状态与同步任务互斥，后台只把仍为 `failed` 的目标认领为 `queued`，完成后刷新统计和失败列表。
+
 - `/api/posts`、`/api/posts/count` 和 `/api/posts/{post_id}`：查询归档内容。
 - `/api/stats/overview`：总览统计。
 - `/api/tags` 及推文标签子资源：本地标签管理。

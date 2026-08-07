@@ -52,6 +52,8 @@ local-favorites serve --archive .\archive-dev --port 8766
 
 ## 测试要求
 
+涉及媒体重试时必须覆盖重试接口、下载锁互斥、`failed` 目标过滤、批量不受 200 条列表限制、单条 404 和前端按钮状态。重试接口应在异步路由中调用后台任务，并在测试中等待 `retrying` 变为完成或错误。
+
 运行完整测试：
 
 ```powershell

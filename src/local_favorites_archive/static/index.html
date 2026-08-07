@@ -139,7 +139,8 @@
         <div class="archive-location"><span>本地存储地址</span><code id="archive-path">正在读取…</code></div>
       </section>
       <section class="failure-panel" aria-labelledby="failures-title">
-        <div class="panel-heading"><div><span class="section-kicker">MEDIA FAILURES</span><h2 id="failures-title">媒体下载失败记录</h2></div><span>最多显示 200 条</span></div>
+        <div class="panel-heading failure-heading"><div><span class="section-kicker">MEDIA FAILURES</span><h2 id="failures-title">媒体下载失败记录</h2></div><div class="failure-heading-actions"><span>最多显示 200 条</span><button id="retry-all-failures" type="button" class="secondary" disabled aria-label="重试全部失败媒体">全部重试</button></div></div>
+        <div id="retry-failures-message" class="failure-message" role="status"></div>
         <div id="sync-failures" class="failure-list" aria-live="polite"><div class="empty-state">正在读取失败记录…</div></div>
       </section>
     </section>

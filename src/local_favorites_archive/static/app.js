@@ -12,6 +12,8 @@ const WORKSPACES = {
 let currentPage = 1;
 let totalPages = 1;
 let allTags = [];
+let syncState = {state: 'idle', media_failed: 0};
+let retrySubmitting = false;
 const selectedPostIds = new Set();
 let pollTimer = null;
 let viewerItems = [];
@@ -29,7 +31,11 @@ async function api(url, options = {}) {
   const response = await fetch(url, options);
   if (response.status === 204) return null;
   const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(body.detail || `请求失败 (${response.status})`);
+  if (!response.ok) {
+    const error = new Error(body.detail || `请求失败 (${response.status})`);
+    error.status = response.status;
+    throw error;
+  }
   return body;
 }
 
@@ -319,13 +325,54 @@ async function loadSyncFailures() {
         <span>${item.kind === 'video' ? '视频' : '图片'}</span>
         <span class="failure-error">${esc(item.error || '未知错误')}</span>
         <a href="${esc(item.url)}" target="_blank" rel="noreferrer">查看原文 ↗</a>
+        <button type="button" class="secondary retry-media" data-retry-media data-post-id="${esc(item.post_id)}" data-media-index="${esc(item.media_index)}">重试</button>
       </div>`).join('') : '<div class="empty-state">当前没有媒体下载失败记录</div>';
+    updateRetryControls();
   } catch (error) {
     $('sync-failures').innerHTML = `<div class="empty-state">失败记录读取失败：${esc(error.message)}</div>`;
+    updateRetryControls();
+  }
+}
+
+function updateRetryControls() {
+  const active = ['starting', 'collecting', 'downloading', 'retrying'].includes(syncState.state);
+  const disabled = active || retrySubmitting;
+  $('retry-all-failures').disabled = disabled || !(syncState.media_failed > 0);
+  document.querySelectorAll('[data-retry-media]').forEach(button => { button.disabled = disabled; });
+}
+
+async function retryMediaFailures(url, button) {
+  retrySubmitting = true;
+  const originalLabel = button.textContent;
+  button.textContent = '正在重试…';
+  $('retry-failures-message').textContent = '正在提交媒体重试任务…';
+  updateRetryControls();
+  try {
+    const result = await api(url, {method: 'POST'});
+    if (!result.requested) {
+      $('retry-failures-message').textContent = '当前没有需要重试的失败媒体';
+      await loadSyncFailures();
+      return;
+    }
+    $('retry-failures-message').textContent = `已提交 ${formatNumber(result.requested)} 个失败媒体，正在重试`;
+    await poll();
+  } catch (error) {
+    $('retry-failures-message').textContent = error.message;
+    if (error.status === 404) await loadSyncFailures();
+  } finally {
+    retrySubmitting = false;
+    button.textContent = originalLabel;
+    updateRetryControls();
   }
 }
 
 function renderSyncState(state) {
+  syncState = state;
+  if (state.retry_requested && state.state === 'finished') {
+    $('retry-failures-message').textContent = `媒体重试完成：成功 ${formatNumber(state.retry_downloaded)}，失败 ${formatNumber(state.retry_failed)}`;
+  } else if (state.retry_requested && state.state === 'error') {
+    $('retry-failures-message').textContent = `媒体重试失败：${state.error || '未知错误'}`;
+  }
   const active = ['starting', 'collecting'].includes(state.state);
   const sync = $('sync-progress');
   if (active) sync.removeAttribute('value'); else sync.value = state.state === 'finished' ? 100 : 0;
@@ -356,6 +403,7 @@ function renderSyncState(state) {
     $('status').textContent = `已达到连续已有推文停止条件（${formatNumber(state.stop_trigger_streak || state.existing_streak)} 条），正在完成媒体下载`;
   }
   renderOverviewSync(state);
+  updateRetryControls();
 }
 
 async function poll() {
@@ -363,7 +411,7 @@ async function poll() {
   try {
     const state = await api('/api/sync/status');
     renderSyncState(state);
-    if (['starting', 'collecting', 'downloading'].includes(state.state)) {
+    if (['starting', 'collecting', 'downloading', 'retrying'].includes(state.state)) {
       pollTimer = setTimeout(poll, 1500);
     }
     if (state.state === 'finished') {
@@ -477,6 +525,16 @@ for (const input of [$('from'), $('to')]) {
 $('page-size').addEventListener('change', () => { currentPage = 1; load(); });
 document.querySelectorAll('.pagination').forEach(setupPagination);
 $('refresh').addEventListener('click', async () => { await Promise.all([loadTags(), load(), loadOverview(), loadSyncFailures(), loadArchiveSettings()]); poll(); });
+$('retry-all-failures').addEventListener('click', event => {
+  retryMediaFailures('/api/sync/failures/retry', event.currentTarget);
+});
+$('sync-failures').addEventListener('click', event => {
+  const button = event.target.closest('[data-retry-media]');
+  if (!button) return;
+  const postId = encodeURIComponent(button.dataset.postId);
+  const mediaIndex = encodeURIComponent(button.dataset.mediaIndex);
+  retryMediaFailures(`/api/sync/failures/${postId}/${mediaIndex}/retry`, button);
+});
 $('select-page').addEventListener('change', event => {
   document.querySelectorAll('.post').forEach(card => {
     const checkbox = card.querySelector('.post-select');

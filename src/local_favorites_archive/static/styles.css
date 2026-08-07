@@ -182,10 +182,13 @@ progress::-webkit-progress-value { background: var(--green); }
 progress::-moz-progress-bar { background: var(--green); }
 .archive-location { grid-column: 1 / -1; display: flex; gap: 16px; align-items: flex-start; color: var(--muted); font-size: 11px; }
 .archive-location code { color: #405249; overflow-wrap: anywhere; }
+.failure-heading-actions { display: flex; align-items: center; gap: 10px; }
+.failure-message { min-height: 22px; color: var(--muted); font-size: 12px; }
 .failure-list { display: grid; gap: 0; }
-.failure-row { display: grid; grid-template-columns: minmax(130px, .8fr) 80px minmax(0, 1.6fr) auto; gap: 14px; align-items: center; padding: 13px 0; border-top: 1px solid var(--line); font-size: 12px; }
+.failure-row { display: grid; grid-template-columns: minmax(130px, .8fr) 80px minmax(0, 1.6fr) auto auto; gap: 14px; align-items: center; padding: 13px 0; border-top: 1px solid var(--line); font-size: 12px; }
 .failure-row:first-child { border-top: 0; }
 .failure-row a { color: var(--green); font-weight: 700; text-decoration: none; }
+.retry-media { min-height: 34px; padding: 7px 10px; }
 
 .tag-manager { max-width: 980px; }
 .tag-create-form { display: grid; grid-template-columns: minmax(180px, 1fr) 48px auto; gap: 9px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
@@ -265,8 +268,10 @@ dialog::backdrop { background: rgba(18, 28, 33, .48); }
   .sync-settings-form input { width: 100%; }
   .archive-location { grid-column: 1; display: block; }
   .archive-location code { display: block; margin-top: 5px; }
-  .failure-row { grid-template-columns: minmax(0, 1fr) auto; }
-  .failure-row .failure-error { grid-column: 1 / -1; }
+  .failure-heading { align-items: flex-start; }
+  .failure-heading-actions { flex-wrap: wrap; justify-content: flex-end; }
+  .failure-row { grid-template-columns: minmax(0, 1fr) auto auto; }
+  .failure-row > div:first-child, .failure-row .failure-error { grid-column: 1 / -1; }
 }
 @media (max-width: 520px) {
   .app-sidebar { grid-template-columns: 1fr; }
@@ -281,6 +286,10 @@ dialog::backdrop { background: rgba(18, 28, 33, .48); }
   .post { padding: 15px; }
   .post-head { display: block; }
   .date { display: block; margin-top: 5px; text-align: left; }
+  .failure-heading { display: grid; }
+  .failure-heading-actions { justify-content: space-between; }
+  .failure-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .failure-row .retry-media { grid-column: 2; }
   .media { grid-template-columns: 1fr; }
   .pagination { justify-content: flex-start; }
   .page-nav { display: grid; grid-template-columns: 38px minmax(0, 1fr) 38px; width: 100%; }
