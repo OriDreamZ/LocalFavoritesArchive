@@ -90,25 +90,54 @@ async function finish(message) {
 }
 
 async function installScrollDriver(tabId, intervalMs) {
-  await chrome.scripting.executeScript({
-    target: { tabId },
-    func: () => {
-      if (globalThis.__localFavoritesArchiveScrollTimer) clearInterval(globalThis.__localFavoritesArchiveScrollTimer);
-      let unchanged = 0;
-      let previousHeight = document.body.scrollHeight;
-      globalThis.__localFavoritesArchiveScrollTimer = setInterval(() => {
-        window.scrollBy({ top: Math.max(window.innerHeight * 0.85, 600), behavior: "smooth" });
-        const height = document.body.scrollHeight;
-        const bottom = window.scrollY + window.innerHeight >= height - 20;
-        unchanged = bottom && height === previousHeight ? unchanged + 1 : 0;
-        previousHeight = height;
-        if (unchanged >= 6) {
-          clearInterval(globalThis.__localFavoritesArchiveScrollTimer);
-          globalThis.__localFavoritesArchiveScrollTimer = null;
-          chrome.runtime.sendMessage({ type: "auto-finished" });
-        }
-      }, intervalMs);
+  let lastError;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        func: (delayMs) => {
+          if (globalThis.__localFavoritesArchiveScrollTimer) clearInterval(globalThis.__localFavoritesArchiveScrollTimer);
+          let unchanged = 0;
+          let previousHeight = document.documentElement.scrollHeight;
+          globalThis.__localFavoritesArchiveScrollTimer = setInterval(() => {
+            const amount = Math.max(window.innerHeight * 0.85, 600);
+            window.scrollBy({ top: amount, behavior: "smooth" });
+            const root = document.scrollingElement || document.documentElement;
+            root.scrollTop += amount;
+            const height = document.documentElement.scrollHeight;
+            const bottom = window.scrollY + window.innerHeight >= height - 20 || root.scrollTop + root.clientHeight >= root.scrollHeight - 20;
+            unchanged = bottom && height === previousHeight ? unchanged + 1 : 0;
+            previousHeight = height;
+            if (unchanged >= 6) {
+              clearInterval(globalThis.__localFavoritesArchiveScrollTimer);
+              globalThis.__localFavoritesArchiveScrollTimer = null;
+              chrome.runtime.sendMessage({ type: "auto-finished" });
+            }
+          }, delayMs);
+        },
+        args: [intervalMs]
+      });
+      return;
+    } catch (error) {
+      lastError = error;
+      await new Promise(resolve => setTimeout(resolve, 1000));
     }
+  }
+  throw lastError || new Error("无法注入自动翻页脚本");
+}
+
+async function waitForTabReady(tabId) {
+  const tab = await chrome.tabs.get(tabId);
+  if (tab.status === "complete") return;
+  await new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => { chrome.tabs.onUpdated.removeListener(listener); reject(new Error("Likes 页面加载超时")); }, 15000);
+    const listener = (updatedTabId, changeInfo) => {
+      if (updatedTabId !== tabId || changeInfo.status !== "complete") return;
+      clearTimeout(timeout);
+      chrome.tabs.onUpdated.removeListener(listener);
+      resolve();
+    };
+    chrome.tabs.onUpdated.addListener(listener);
   });
 }
 
@@ -139,7 +168,8 @@ async function start(tabId, url) {
   await chrome.debugger.sendCommand({ tabId }, "Network.enable");
   if (targetUrl === url) await chrome.tabs.reload(tabId);
   else await chrome.tabs.update(tabId, { url: targetUrl });
-  await new Promise(resolve => setTimeout(resolve, 2500));
+  await waitForTabReady(tabId);
+  await new Promise(resolve => setTimeout(resolve, 1000));
   await installScrollDriver(tabId, scrollIntervalMs);
 }
 
