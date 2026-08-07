@@ -83,3 +83,21 @@ def test_downloader_skips_deferred_video_thumbnail(tmp_path, monkeypatch):
     store.upsert_post(post)
     monkeypatch.setattr(httpx.AsyncClient, "stream", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("thumbnail must not download")))
     assert asyncio.run(MediaDownloader(store).run()) == {"downloaded": 0, "failed": 0}
+
+
+def test_downloader_rejects_image_response_for_video(tmp_path, monkeypatch):
+    store = ArchiveStore(tmp_path)
+    post = sample_post("4")
+    post.media = [MediaItem(0, "video", "https://video.twimg.com/a.mp4", "video/mp4")]
+    store.upsert_post(post)
+
+    class FakeResponse:
+        headers = {"content-type": "image/jpeg"}
+        async def __aenter__(self): return self
+        async def __aexit__(self, exc_type, exc, traceback): return False
+        def raise_for_status(self): return None
+        async def aiter_bytes(self): yield b"not-a-video"
+
+    monkeypatch.setattr(httpx.AsyncClient, "stream", lambda self, method, url: FakeResponse())
+    assert asyncio.run(MediaDownloader(store).run()) == {"downloaded": 0, "failed": 1}
+    assert store.get_post("4")["media"][0]["status"] == "failed"

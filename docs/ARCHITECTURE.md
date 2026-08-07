@@ -87,3 +87,6 @@ flowchart LR
 `local-favorites init` 创建目录和数据库结构；`local-favorites serve` 初始化后启动 Web 服务；`local-favorites retry-media` 对未完成媒体执行重试。备份、移动或彻底清空归档前必须停止服务，避免 SQLite 和下载器继续写入。
 
 收藏查询使用 `tag_ids` 与 `tag_mode` 生成交集或并集条件。扩展的 DOM 补采通过 `/api/ingest/dom-posts` 进入与 GraphQL 相同的入库状态机。`--lan` 将服务绑定到 `0.0.0.0`，但扩展仍调用回环地址。
+## 媒体一致性校验
+
+采集链路以 Likes GraphQL 响应为唯一推文来源。下载器根据数据库媒体类型校验响应 MIME，视频必须返回 `video/*`，图片必须返回 `image/*`；校验失败时标记为 `failed`，不保留错误文件。同步中心从失败记录中展示推文 ID、作者、原文链接、媒体序号和错误原因。

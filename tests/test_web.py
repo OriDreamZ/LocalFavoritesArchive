@@ -622,16 +622,14 @@ def test_multi_tag_query_parameters_filter_posts_and_count_consistently(tmp_path
     assert {item["post_id"] for item in union.json()} == {"1", "2", "3"}
 
 
-def test_dom_post_ingest_persists_rendered_likes_and_deduplicates(tmp_path):
+def test_dom_post_ingest_is_disabled(tmp_path):
     client = TestClient(create_app(Settings(archive_root=tmp_path)))
     payload = {"posts": [{
         "post_id": "dom-1", "text": "当前页面推文", "author_handle": "alice", "author_name": "Alice",
         "published_at": "2024-01-02T03:04:05.000Z", "url": "https://x.com/alice/status/dom-1",
         "media": [{"kind": "image", "source_url": "https://pbs.twimg.com/media/a.jpg"}],
     }]}
-    assert client.post("/api/ingest/dom-posts", json=payload).json()["new"] == 1
-    assert client.post("/api/ingest/dom-posts", json=payload).json()["new"] == 0
-    assert client.get("/api/posts").json()[0]["post_id"] == "dom-1"
+    assert client.post("/api/ingest/dom-posts", json=payload).status_code == 404
 
 
 def test_tag_api_validates_input_and_missing_records(tmp_path):

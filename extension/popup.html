@@ -4,7 +4,8 @@
 <body>
   <h1>本地喜欢归档</h1>
   <p id="status">正在读取状态…</p>
-  <div class="actions"><button id="start">从当前位置继续</button><button id="restart" class="secondary">从头重新同步</button></div>
+  <p class="notice">同步前必须刷新当前 Likes 页面。扩展只读取刷新后捕获的网络响应，不读取页面缩略图，避免视频被误存为图片。</p>
+  <div class="actions"><button id="start">刷新并开始同步</button></div>
   <button id="stop" class="secondary stop">停止</button>
   <a href="http://127.0.0.1:8765" target="_blank">打开本地归档</a>
   <script src="popup.js"></script>

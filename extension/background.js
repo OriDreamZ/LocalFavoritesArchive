@@ -3,15 +3,9 @@ let session = { running: false, tabId: null, discovered: 0, added: 0, batches: 0
 const pendingLikes = new Map();
 let finishPromise = null;
 
-const delay = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
-
 async function saveState(patch = {}) {
   session = { ...session, ...patch };
   await chrome.storage.local.set({ archiveState: session });
-}
-
-async function debugCommand(method, params = {}) {
-  return chrome.debugger.sendCommand({ tabId: session.tabId }, method, params);
 }
 
 async function sendPayload(payload) {
@@ -28,25 +22,7 @@ async function sendPayload(payload) {
     batches: session.batches + 1,
     message: `已发现 ${session.discovered + result.discovered} 条，新增 ${session.added + result.new} 条`
   });
-  if (result.stop_requested && session.running) {
-    await finish(`已连续读取 ${result.existing_streak} 条本地已有推文，正在下载媒体`);
-  }
-}
-
-async function sendDomPosts(posts) {
-  if (!posts?.length) return;
-  const response = await fetch(`${LOCAL_API}/api/ingest/dom-posts`, {
-    method: "POST", headers: { "Content-Type": "application/json", "X-Local-Favorites-Client": "extension" }, body: JSON.stringify({ posts })
-  });
-  if (!response.ok) throw new Error(`本地服务返回 ${response.status}`);
-  const result = await response.json();
-  await saveState({
-    discovered: session.discovered + result.discovered,
-    added: session.added + result.new,
-    batches: session.batches + 1,
-    message: `已发现 ${session.discovered + result.discovered} 条，新增 ${session.added + result.new} 条`
-  });
-  if (result.stop_requested && session.running) await finish(`已连续读取 ${result.existing_streak} 条本地已有推文，正在下载媒体`);
+  if (result.stop_requested && session.running) await finish(`已连续读取 ${result.existing_streak} 条本地已有推文，正在完成下载`);
 }
 
 chrome.debugger.onEvent.addListener(async (source, method, params) => {
@@ -66,10 +42,10 @@ chrome.debugger.onEvent.addListener(async (source, method, params) => {
     pendingLikes.delete(params.requestId);
     try {
       const result = await chrome.debugger.sendCommand(source, "Network.getResponseBody", { requestId: params.requestId });
-      const text = result.base64Encoded ? atob(result.body) : result.body;
-      await sendPayload(JSON.parse(text));
+      const body = result.base64Encoded ? atob(result.body) : result.body;
+      await sendPayload(JSON.parse(body));
     } catch (error) {
-      await saveState({ message: `读取已完成的 Likes 响应失败：${error.message}` });
+      await saveState({ message: `读取 Likes 响应失败：${error.message}` });
     }
   }
 });
@@ -83,75 +59,21 @@ async function finishOnce(message) {
   pendingLikes.clear();
   await saveState({ running: false, tabId: null, message });
   if (tabId !== null) {
-    try {
-      await chrome.scripting.executeScript({
-        target: { tabId },
-        func: () => {
-          if (globalThis.__localFavoritesArchiveTimer) clearInterval(globalThis.__localFavoritesArchiveTimer);
-          globalThis.__localFavoritesArchiveTimer = null;
-        }
-      });
-    } catch (_) {}
     try { await chrome.debugger.detach({ tabId }); } catch (_) {}
   }
   try { await fetch(`${LOCAL_API}/api/ingest/finish`, { method: "POST", headers: { "X-Local-Favorites-Client": "extension" } }); } catch (_) {}
 }
 
 async function finish(message) {
-  if (!finishPromise) {
-    finishPromise = finishOnce(message).finally(() => { finishPromise = null; });
-  }
+  if (!finishPromise) finishPromise = finishOnce(message).finally(() => { finishPromise = null; });
   return finishPromise;
 }
 
-async function installScrollDriver(tabId) {
-  await chrome.scripting.executeScript({
-    target: { tabId },
-    func: () => {
-      const collectRenderedPosts = () => [...document.querySelectorAll('article[data-testid="tweet"]')].map(article => {
-        const time = article.querySelector("time");
-        const statusLink = time?.closest('a[href*="/status/"]') || article.querySelector('a[href*="/status/"]');
-        const match = statusLink?.getAttribute("href")?.match(/^\/([^/]+)\/status\/(\d+)/);
-        if (!match || !time) return null;
-        const userName = article.querySelector('[data-testid="User-Name"]');
-        const links = [...article.querySelectorAll('[data-testid="tweetText"] a[href]')].map(link => link.href).filter(url => /^https?:/.test(url));
-        const media = [
-          ...[...article.querySelectorAll('[data-testid="tweetPhoto"] img[src]')].map(image => ({ kind: "image", source_url: image.src })),
-          ...[...article.querySelectorAll('video[src]')].filter(video => !video.src.startsWith("blob:")).map(video => ({ kind: "video", source_url: video.src }))
-        ];
-        return { post_id: match[2], url: `${location.origin}${statusLink.getAttribute("href").split("?")[0]}`, text: article.querySelector('[data-testid="tweetText"]')?.innerText || "", author_handle: match[1], author_name: userName?.querySelector("span")?.textContent || match[1], published_at: time.dateTime, links, media };
-      }).filter(Boolean);
-      const sendRenderedPosts = () => chrome.runtime.sendMessage({ type: "dom-batch", posts: collectRenderedPosts() });
-      if (globalThis.__localFavoritesArchiveTimer) clearInterval(globalThis.__localFavoritesArchiveTimer);
-      let unchanged = 0;
-      let previousHeight = document.body.scrollHeight;
-      sendRenderedPosts();
-      globalThis.__localFavoritesArchiveTimer = setInterval(() => {
-        sendRenderedPosts();
-        window.scrollBy({ top: Math.max(window.innerHeight * 0.85, 600), behavior: "smooth" });
-        const height = document.body.scrollHeight;
-        const bottom = window.scrollY + window.innerHeight >= height - 20;
-        unchanged = bottom && height === previousHeight ? unchanged + 1 : 0;
-        previousHeight = height;
-        if (unchanged >= 6) {
-          clearInterval(globalThis.__localFavoritesArchiveTimer);
-          globalThis.__localFavoritesArchiveTimer = null;
-          chrome.runtime.sendMessage({ type: "auto-finished" });
-        }
-      }, 1800);
-    }
-  });
-}
-
-async function start(tabId, url, mode = "resume") {
+async function start(tabId, url) {
   if (session.running) throw new Error("同步已经在运行");
-  await fetch(`${LOCAL_API}/api/sync/status`).then(response => {
-    if (!response.ok) throw new Error("本地归档服务未运行");
-  }).catch(() => { throw new Error("无法连接 http://127.0.0.1:8765"); });
-  await fetch(`${LOCAL_API}/api/ingest/start`, { method: "POST", headers: { "X-Local-Favorites-Client": "extension" } });
-  if (!/^https:\/\/(x|twitter)\.com\//i.test(url || "")) {
-    throw new Error("请先在当前标签页打开 X");
-  }
+  const health = await fetch(`${LOCAL_API}/api/sync/status`).catch(() => null);
+  if (!health?.ok) throw new Error("无法连接 http://127.0.0.1:8765");
+  if (!/^https:\/\/(x|twitter)\.com\//i.test(url || "")) throw new Error("请先在当前标签页打开 X");
   let targetUrl = url;
   const isLikes = /^https:\/\/(x|twitter)\.com\/(?:[^/]+|i)\/likes(?:[/?#]|$)/i.test(url);
   if (!isLikes) {
@@ -160,44 +82,26 @@ async function start(tabId, url, mode = "resume") {
       func: () => {
         const reserved = new Set(["home", "explore", "notifications", "messages", "search", "settings", "login", "signup", "compose", "tos", "privacy", "i"]);
         const paths = [...document.querySelectorAll('a[href^="/"]')].map(link => link.getAttribute("href").split("?")[0].replace(/\/$/, ""));
-        const profile = paths.find(path => {
-          const parts = path.split("/").filter(Boolean);
-          return parts.length === 1 && !reserved.has(parts[0].toLowerCase());
-        });
+        const profile = paths.find(path => { const parts = path.split("/").filter(Boolean); return parts.length === 1 && !reserved.has(parts[0].toLowerCase()); });
         return profile ? `${location.origin}${profile}/likes` : null;
       }
     });
-    if (!result.result) throw new Error("无法从当前页面确定账号，请手动打开个人主页的 Likes 标签后重试");
+    if (!result.result) throw new Error("无法确定账号，请手动打开账号 Likes 页面后重试");
     targetUrl = result.result;
   }
+  await fetch(`${LOCAL_API}/api/ingest/start`, { method: "POST", headers: { "X-Local-Favorites-Client": "extension" } });
   finishPromise = null;
   await chrome.debugger.attach({ tabId }, "1.3");
-  await saveState({ running: true, tabId, discovered: 0, added: 0, batches: 0, message: mode === "restart" ? "正在从头加载 Likes 页面" : "正在从当前位置继续读取" });
-  await debugCommand("Network.enable");
-  if (targetUrl === url && mode === "restart") await chrome.tabs.reload(tabId);
-  else if (targetUrl !== url) await chrome.tabs.update(tabId, { url: targetUrl });
-  if (targetUrl !== url || mode === "restart") await delay(2500);
-  await installScrollDriver(tabId);
+  await saveState({ running: true, tabId, discovered: 0, added: 0, batches: 0, message: "正在刷新 Likes 页面并监听网络响应" });
+  await chrome.debugger.sendCommand({ tabId }, "Network.enable");
+  if (targetUrl === url) await chrome.tabs.reload(tabId);
+  else await chrome.tabs.update(tabId, { url: targetUrl });
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   (async () => {
-    if (message.type === "start") {
-      await start(message.tabId, message.url, message.mode);
-      return { ok: true };
-    }
-    if (message.type === "dom-batch") {
-      await sendDomPosts(message.posts);
-      return { ok: true };
-    }
-    if (message.type === "stop") {
-      await finish("已手动停止，正在下载媒体");
-      return { ok: true };
-    }
-    if (message.type === "auto-finished") {
-      await finish("已到达当前可访问内容末尾，正在下载媒体");
-      return { ok: true };
-    }
+    if (message.type === "start") { await start(message.tabId, message.url); return { ok: true }; }
+    if (message.type === "stop") { await finish("已手动停止，正在完成下载"); return { ok: true }; }
     if (message.type === "status") return { ok: true, state: session };
     return { ok: false, error: "未知操作" };
   })().then(sendResponse).catch(error => sendResponse({ ok: false, error: error.message }));

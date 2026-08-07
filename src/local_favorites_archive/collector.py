@@ -147,6 +147,7 @@ def posts_from_x_response(payload: Any) -> list[Post]:
 
 
 def post_from_dom_payload(value: dict[str, Any]) -> Post | None:
+    """兼容旧数据工具；扩展和服务入口不再调用 DOM 入库。"""
     post_id = str(value.get("post_id") or "").strip()
     handle = str(value.get("author_handle") or "").lstrip("@").strip()
     url = str(value.get("url") or "").strip()
@@ -157,26 +158,12 @@ def post_from_dom_payload(value: dict[str, Any]) -> Post | None:
         published_at = datetime.fromisoformat(str(value.get("published_at") or "").replace("Z", "+00:00"))
     except ValueError:
         pass
-    links = [
-        PostLink(index, link, link, link)
-        for index, link in enumerate(value.get("links") or [])
-        if isinstance(link, str) and link.startswith(("https://", "http://"))
-    ]
+    links = [PostLink(index, link, link, link) for index, link in enumerate(value.get("links") or []) if isinstance(link, str) and link.startswith(("https://", "http://"))]
     media = []
     for index, item in enumerate(value.get("media") or []):
         source = str(item.get("source_url") or "")
         kind = str(item.get("kind") or "")
         if kind in {"image", "video"} and source.startswith(("https://", "http://")):
             is_video_thumbnail = "amplify_video_thumb" in source
-            media.append(MediaItem(
-                index, "video" if is_video_thumbnail else kind, source,
-                "video/thumbnail" if is_video_thumbnail else item.get("mime_type"),
-                status="deferred" if is_video_thumbnail else "queued",
-            ))
-    return Post(
-        post_id=post_id, url=url, text=_normalize_whitespace(str(value.get("text") or "")),
-        author_id=str(value.get("author_id") or ""), author_handle=handle,
-        author_name=str(value.get("author_name") or handle), published_at=published_at,
-        collected_at=datetime.now(timezone.utc), raw={"source": "dom", "post": value},
-        media=media, links=links,
-    )
+            media.append(MediaItem(index, "video" if is_video_thumbnail else kind, source, "video/thumbnail" if is_video_thumbnail else item.get("mime_type"), status="deferred" if is_video_thumbnail else "queued"))
+    return Post(post_id=post_id, url=url, text=_normalize_whitespace(str(value.get("text") or "")), author_id=str(value.get("author_id") or ""), author_handle=handle, author_name=str(value.get("author_name") or handle), published_at=published_at, collected_at=datetime.now(timezone.utc), raw={"source": "dom", "post": value}, media=media, links=links)

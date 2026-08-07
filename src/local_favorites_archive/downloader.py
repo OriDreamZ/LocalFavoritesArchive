@@ -48,6 +48,10 @@ class MediaDownloader:
                     try:
                         async with client.stream("GET", row["source_url"]) as response:
                             response.raise_for_status()
+                            content_type = response.headers.get("content-type", "").split(";", 1)[0].lower()
+                            expected = "video/" if row["kind"] == "video" else "image/"
+                            if not content_type.startswith(expected):
+                                raise ValueError(f"媒体类型校验失败：推文 {row['post_id']} 第 {row['media_index'] + 1} 项应为{expected}，实际为 {content_type or '未知'}")
                             digest = hashlib.sha256()
                             size = 0
                             with temp.open("wb") as handle:
@@ -55,7 +59,7 @@ class MediaDownloader:
                                     handle.write(chunk); digest.update(chunk); size += len(chunk)
                         os.replace(temp, target)
                         with self.store._connect() as db:
-                            db.execute("UPDATE media SET status='downloaded', byte_size=?, checksum=?, mime_type=COALESCE(mime_type,?), error=NULL WHERE post_id=? AND media_index=?", (size, digest.hexdigest(), response.headers.get("content-type", "").split(";")[0], row["post_id"], row["media_index"]))
+                            db.execute("UPDATE media SET status='downloaded', byte_size=?, checksum=?, mime_type=COALESCE(mime_type,?), error=NULL WHERE post_id=? AND media_index=?", (size, digest.hexdigest(), content_type, row["post_id"], row["media_index"]))
                         stats["downloaded"] += 1
                     except Exception as exc:
                         temp.unlink(missing_ok=True)

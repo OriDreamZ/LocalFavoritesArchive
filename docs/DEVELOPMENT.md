@@ -114,3 +114,6 @@ node --check src\local_favorites_archive\static\app.js
 - Chrome 扩展可以连接默认端口，且权限没有无说明扩张。
 - README 命令、端口、路径和功能与代码一致。
 - `LICENSE` 与 `pyproject.toml` 均声明 `GPL-3.0-or-later`。
+## 采集安全回归要求
+
+扩展测试必须确认同步前刷新 Likes 页面，源码中不得重新引入 DOM 入库接口、DOM 推文批次或不刷新续采逻辑。下载器测试必须覆盖视频收到图片 MIME、图片收到视频 MIME、缩略图地址和空响应等情况，并确认失败记录包含可定位的推文信息。

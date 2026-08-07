@@ -27,21 +27,19 @@ def test_extension_finishes_when_server_requests_threshold_stop():
     assert "result.existing_streak" in source
 
 
-def test_extension_supports_resume_and_restart_collection_modes():
+def test_extension_only_uses_refreshed_network_collection():
     background = Path("extension/background.js").read_text(encoding="utf-8")
     popup = Path("extension/popup.js").read_text(encoding="utf-8")
     html = Path("extension/popup.html").read_text(encoding="utf-8")
 
-    assert 'start("resume")' in popup
-    assert 'start("restart")' in popup
-    assert 'id="restart"' in html
-    assert "mode === \"restart\"" in background
-    assert "if (targetUrl === url && mode === \"restart\")" in background
-    assert "/api/ingest/dom-posts" in background
-    assert 'article[data-testid="tweet"]' in background
-    assert '[data-testid="tweetText"]' in background
-    assert 'a[href*="/status/"]' in background
-    assert "blob:" in background
+    assert 'start()' in popup
+    assert 'id="start"' in html
+    assert 'chrome.tabs.reload(tabId)' in background
+    assert 'Network.loadingFinished' in background
+    assert "/api/ingest/dom-posts" not in background
+    assert "collectRenderedPosts" not in background
+    assert "dom-batch" not in background
+    assert "从当前位置继续" not in html
     assert '"X-Local-Favorites-Client": "extension"' in background
 
 
