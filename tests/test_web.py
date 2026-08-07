@@ -77,6 +77,16 @@ def test_local_api_and_ui(tmp_path):
     assert client.get("/api/posts/count").json() == {"total": 0}
 
 
+def test_lan_mode_reports_addresses_and_guards_mutations(tmp_path):
+    settings = Settings(archive_root=tmp_path, host="0.0.0.0", port=9876, lan_enabled=True)
+    client = TestClient(create_app(settings))
+    status_payload = client.get("/api/sync/status").json()
+    assert status_payload["lan_enabled"] is True
+    assert all(url.endswith(":9876") for url in status_payload["access_urls"])
+    assert client.post("/api/ingest/start").status_code == 403
+    assert client.post("/api/ingest/start", headers={"X-Local-Favorites-Client": "web"}).status_code == 200
+
+
 def test_retry_all_failed_media_runs_only_claimed_failures(tmp_path, monkeypatch):
     store = ArchiveStore(tmp_path)
     add_failed_media(store, "1")

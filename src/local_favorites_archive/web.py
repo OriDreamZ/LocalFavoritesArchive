@@ -1,4 +1,5 @@
 import asyncio
+import socket
 from pathlib import Path
 from typing import Any
 
@@ -46,6 +47,23 @@ def create_app(settings: Settings) -> FastAPI:
     settings.ensure_dirs()
     store = ArchiveStore(settings.archive_root)
     app = FastAPI(title="Local Favorites Archive")
+
+    def access_urls() -> list[str]:
+        if not settings.lan_enabled:
+            return [f"http://127.0.0.1:{settings.port}"]
+        addresses = {"127.0.0.1"}
+        try:
+            addresses.update(info[4][0] for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET))
+        except OSError:
+            pass
+        return [f"http://{address}:{settings.port}" for address in sorted(addresses)]
+
+    @app.middleware("http")
+    async def lan_mutation_guard(request, call_next):
+        if settings.lan_enabled and request.method in {"POST", "PATCH", "DELETE"} and request.url.path.startswith("/api/"):
+            if request.headers.get("X-Local-Favorites-Client") not in {"web", "extension"}:
+                return JSONResponse({"detail": "局域网管理请求缺少客户端标记"}, status_code=403)
+        return await call_next(request)
     static = Path(__file__).parent / "static"
     state: dict[str, Any] = {
         "state": "idle",
@@ -327,6 +345,8 @@ def create_app(settings: Settings) -> FastAPI:
         return {
             **state,
             "archive_path": str(settings.archive_root.resolve()),
+            "lan_enabled": settings.lan_enabled,
+            "access_urls": access_urls(),
             "posts_total": posts_total,
             "authors_total": authors_total,
             "media_total": media_total,

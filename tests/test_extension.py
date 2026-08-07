@@ -42,3 +42,11 @@ def test_extension_supports_resume_and_restart_collection_modes():
     assert '[data-testid="tweetText"]' in background
     assert 'a[href*="/status/"]' in background
     assert "blob:" in background
+    assert '"X-Local-Favorites-Client": "extension"' in background
+
+
+def test_cli_exposes_explicit_lan_switch():
+    source = Path("src/local_favorites_archive/cli.py").read_text(encoding="utf-8")
+    assert '"--lan"' in source
+    assert 'host="0.0.0.0" if args.lan else "127.0.0.1"' in source
+    assert "无身份验证" in source

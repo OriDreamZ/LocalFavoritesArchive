@@ -29,6 +29,7 @@ let viewerDragStartX = 0;
 let viewerDragStartY = 0;
 
 async function api(url, options = {}) {
+  options = {...options, headers: {'X-Local-Favorites-Client': 'web', ...(options.headers || {})}};
   const response = await fetch(url, options);
   if (response.status === 204) return null;
   const body = await response.json().catch(() => ({}));
@@ -413,6 +414,7 @@ function renderSyncState(state) {
   $('media-progress').value = total ? Math.round(completed / total * 100) : 0;
   $('media-progress-label').textContent = `${formatNumber(state.media_downloaded)} / ${formatNumber(total)}${state.media_queued ? ` · 排队 ${formatNumber(state.media_queued)}` : ''}${state.media_failed ? ` · 失败 ${formatNumber(state.media_failed)}` : ''}`;
   $('archive-path').textContent = state.archive_path || '';
+  $('access-mode').textContent = state.lan_enabled ? `局域网完整管理：${(state.access_urls || []).join('、')}` : '仅本机访问';
   $('sync-posts-total').textContent = formatNumber(state.posts_total);
   $('sync-media-total').textContent = formatNumber(total);
   $('sync-media-downloaded').textContent = formatNumber(state.media_downloaded);

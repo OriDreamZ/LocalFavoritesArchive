@@ -8,6 +8,7 @@ class Settings:
     host: str = "127.0.0.1"
     port: int = 8765
     max_media_concurrency: int = 2
+    lan_enabled: bool = False
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "archive_root", Path(self.archive_root).expanduser())

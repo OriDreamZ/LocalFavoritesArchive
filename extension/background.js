@@ -17,7 +17,7 @@ async function debugCommand(method, params = {}) {
 async function sendPayload(payload) {
   const response = await fetch(`${LOCAL_API}/api/ingest/x-response`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-Local-Favorites-Client": "extension" },
     body: JSON.stringify(payload)
   });
   if (!response.ok) throw new Error(`本地服务返回 ${response.status}`);
@@ -36,7 +36,7 @@ async function sendPayload(payload) {
 async function sendDomPosts(posts) {
   if (!posts?.length) return;
   const response = await fetch(`${LOCAL_API}/api/ingest/dom-posts`, {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ posts })
+    method: "POST", headers: { "Content-Type": "application/json", "X-Local-Favorites-Client": "extension" }, body: JSON.stringify({ posts })
   });
   if (!response.ok) throw new Error(`本地服务返回 ${response.status}`);
   const result = await response.json();
@@ -94,7 +94,7 @@ async function finishOnce(message) {
     } catch (_) {}
     try { await chrome.debugger.detach({ tabId }); } catch (_) {}
   }
-  try { await fetch(`${LOCAL_API}/api/ingest/finish`, { method: "POST" }); } catch (_) {}
+  try { await fetch(`${LOCAL_API}/api/ingest/finish`, { method: "POST", headers: { "X-Local-Favorites-Client": "extension" } }); } catch (_) {}
 }
 
 async function finish(message) {
@@ -148,7 +148,7 @@ async function start(tabId, url, mode = "resume") {
   await fetch(`${LOCAL_API}/api/sync/status`).then(response => {
     if (!response.ok) throw new Error("本地归档服务未运行");
   }).catch(() => { throw new Error("无法连接 http://127.0.0.1:8765"); });
-  await fetch(`${LOCAL_API}/api/ingest/start`, { method: "POST" });
+  await fetch(`${LOCAL_API}/api/ingest/start`, { method: "POST", headers: { "X-Local-Favorites-Client": "extension" } });
   if (!/^https:\/\/(x|twitter)\.com\//i.test(url || "")) {
     throw new Error("请先在当前标签页打开 X");
   }
