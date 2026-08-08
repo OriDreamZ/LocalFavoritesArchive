@@ -25,10 +25,10 @@ Local Favorites Archive 是一个本地优先的 X Likes 归档工具。它通�
 
 ## 安装
 
-在 PowerShell 中进入项目目录：
+在 PowerShell 中进入项目目录（填写自己本机的项目存放地址，以下为示例）：
 
 ```powershell
-cd D:\MyCode\VibeCodingProjects\LocalFavoritesArchive
+cd D:\MyDocument\LocalFavoritesArchive
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e ".[test]"
 ```
