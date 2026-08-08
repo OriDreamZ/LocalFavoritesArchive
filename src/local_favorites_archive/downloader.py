@@ -20,7 +20,7 @@ class MediaDownloader:
         stats = {"downloaded": 0, "failed": 0}
         if targets == []:
             return stats
-        where = ["status NOT IN ('downloaded', 'deferred')", "source_url != ''"]
+        where = ["status != 'downloaded'", "source_url != ''"]
         args: list[object] = []
         if targets is not None:
             unique_targets = list(dict.fromkeys(targets))

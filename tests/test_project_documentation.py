@@ -45,30 +45,28 @@ def test_long_term_documents_are_present_and_chinese() -> None:
         assert any("\u4e00" <= character <= "\u9fff" for character in content)
 
 
-def test_documents_describe_multi_tag_resume_and_lan_modes() -> None:
+def test_documents_describe_current_sync_and_lan_modes() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    assert "tag_mode=all" in readme
-    assert "从当前位置继续" in readme and "从头重新同步" in readme
+    assert "多个标签" in readme
+    assert "刷新并开始同步" in readme
+    assert "不读取已渲染推文 DOM" in readme
     assert "--lan" in readme and "无身份验证" in readme
 
 
 def test_readme_covers_setup_usage_storage_and_license() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     required_sections = (
-        "## 项目简介",
-        "## 功能概览",
+        "## 功能",
         "## 运行环境",
         "## 安装",
-        "## 启动与初始化",
+        "## 启动",
         "## 加载 Chrome 扩展",
-        "## 同步收藏",
+        "## 同步 Likes",
         "## 本地浏览与管理",
-        "## 数据存储与备份",
-        "## 常见问题",
+        "## 备份与迁移",
         "## 开发与测试",
-        "## 项目结构",
-        "## 使用限制与免责声明",
-        "## 开源许可证",
+        "## 限制",
+        "## 许可证",
     )
     assert all(section in readme for section in required_sections)
     assert "GPL-3.0-or-later" in readme
@@ -81,9 +79,7 @@ def test_documentation_explains_media_retry_modes() -> None:
         filename: (ROOT / "docs" / filename).read_text(encoding="utf-8")
         for filename in EXPECTED_DOCUMENTS
     }
-    assert "同步期间的隐式重试" in readme
-    assert "服务重启不会自动重试" in readme
-    assert "全部重试" in readme and "单条重试" in readme
+    assert "单条或全部重试" in readme
     assert "failed" in readme and "queued" in readme
     assert "local-favorites retry-media" in readme
     assert "显式重试" in documents["FEATURES.md"]

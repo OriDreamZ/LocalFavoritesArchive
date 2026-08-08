@@ -76,15 +76,6 @@ def test_downloader_targets_do_not_process_other_queued_media(tmp_path, monkeypa
     assert store.get_post("2")["media"][0]["status"] == "queued"
 
 
-def test_downloader_skips_deferred_video_thumbnail(tmp_path, monkeypatch):
-    store = ArchiveStore(tmp_path)
-    post = sample_post("3")
-    post.media = [MediaItem(0, "video", "https://pbs.twimg.com/amplify_video_thumb/1/img/a.jpg", "video/thumbnail", status="deferred")]
-    store.upsert_post(post)
-    monkeypatch.setattr(httpx.AsyncClient, "stream", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("thumbnail must not download")))
-    assert asyncio.run(MediaDownloader(store).run()) == {"downloaded": 0, "failed": 0}
-
-
 def test_downloader_rejects_image_response_for_video(tmp_path, monkeypatch):
     store = ArchiveStore(tmp_path)
     post = sample_post("4")
