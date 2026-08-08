@@ -77,6 +77,20 @@ def test_local_api_and_ui(tmp_path):
     assert client.get("/api/posts/count").json() == {"total": 0}
 
 
+def test_favorites_exposes_persistent_ordered_grid_column_control(tmp_path):
+    client = TestClient(create_app(Settings(archive_root=tmp_path)))
+    html = client.get("/").text
+    script = client.get("/assets/app.js").text
+
+    assert 'id="layout-columns"' in html
+    for columns in range(1, 5):
+        assert f'data-columns="{columns}"' in html
+    assert 'aria-pressed="true"' in html
+    assert "function setPostColumns" in script
+    assert "localStorage" in script
+    assert "--post-columns" in script
+
+
 def test_lan_mode_reports_addresses_and_guards_mutations(tmp_path):
     settings = Settings(archive_root=tmp_path, host="0.0.0.0", port=9876, lan_enabled=True)
     client = TestClient(create_app(settings))

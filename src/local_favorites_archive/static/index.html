@@ -89,6 +89,16 @@
               <span id="selection-count" class="numeric">已选 0 条</span>
               <button id="delete-selected" class="danger" type="button" disabled>删除所选</button>
             </div>
+            <div class="layout-column-control">
+              <span id="layout-columns-label">每行列数</span>
+              <div id="layout-columns" class="segmented-control" role="group" aria-labelledby="layout-columns-label">
+                <button class="secondary" type="button" data-columns="1" aria-pressed="false">1</button>
+                <button class="secondary" type="button" data-columns="2" aria-pressed="true">2</button>
+                <button class="secondary" type="button" data-columns="3" aria-pressed="false">3</button>
+                <button class="secondary" type="button" data-columns="4" aria-pressed="false">4</button>
+              </div>
+              <span class="responsive-layout-note">窄屏自动减少</span>
+            </div>
             <label class="page-size-control">每页<select id="page-size"><option value="20">20 条</option><option value="50">50 条</option><option value="100">100 条</option></select></label>
           </div>
         </div>
@@ -102,7 +112,7 @@
             <button class="secondary" data-page-action="jump" type="button">跳转</button>
           </div>
         </nav>
-        <section id="posts" aria-live="polite"></section>
+        <section id="posts" aria-live="polite" style="--post-columns: 2"></section>
         <nav class="pagination" aria-label="推文分页">
           <div class="page-nav">
             <button id="prev-page" class="secondary page-button" data-page-action="prev" type="button" aria-label="上一页" title="上一页">‹</button>

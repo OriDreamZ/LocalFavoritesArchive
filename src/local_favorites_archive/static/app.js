@@ -1,6 +1,7 @@
 const $ = id => document.getElementById(id);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, character => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[character]));
 const numberFormatter = new Intl.NumberFormat('zh-CN');
+const POST_COLUMNS_STORAGE_KEY = 'local-favorites-post-columns';
 
 const WORKSPACES = {
   overview: {title: '收藏总览', heading: 'overview-title'},
@@ -115,6 +116,23 @@ function restoreFiltersFromUrl() {
 
 function syncDateInputState(input) {
   input.closest('.date-control').classList.toggle('has-value', Boolean(input.value));
+}
+
+function setPostColumns(value, {persist = true} = {}) {
+  const columns = Math.min(4, Math.max(1, Number.parseInt(value, 10) || 2));
+  $('posts').style.setProperty('--post-columns', columns);
+  document.querySelectorAll('#layout-columns [data-columns]').forEach(button => {
+    button.setAttribute('aria-pressed', String(Number(button.dataset.columns) === columns));
+  });
+  if (persist) {
+    try { localStorage.setItem(POST_COLUMNS_STORAGE_KEY, String(columns)); } catch {}
+  }
+}
+
+function restorePostColumns() {
+  let storedColumns = 2;
+  try { storedColumns = localStorage.getItem(POST_COLUMNS_STORAGE_KEY) || 2; } catch {}
+  setPostColumns(storedColumns, {persist: false});
 }
 
 function updatePageControls(total) {
@@ -561,6 +579,10 @@ for (const input of [$('from'), $('to')]) {
   input.addEventListener('change', () => syncDateInputState(input));
 }
 $('page-size').addEventListener('change', () => { currentPage = 1; load(); });
+$('layout-columns').addEventListener('click', event => {
+  const button = event.target.closest('[data-columns]');
+  if (button) setPostColumns(button.dataset.columns);
+});
 document.querySelectorAll('.pagination').forEach(setupPagination);
 $('refresh').addEventListener('click', async () => { await Promise.all([loadTags(), load(), loadOverview(), loadSyncFailures(), loadArchiveSettings()]); poll(); });
 $('retry-all-failures').addEventListener('click', event => {
@@ -750,6 +772,7 @@ document.addEventListener('keydown', event => {
   }
   activateWorkspace();
   restoreFiltersFromUrl();
+  restorePostColumns();
   try {
     await loadTags();
     await Promise.all([load(), loadOverview(), loadSyncFailures(), loadArchiveSettings()]);
