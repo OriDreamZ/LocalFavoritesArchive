@@ -1,6 +1,28 @@
 .venv/
 __pycache__/
-*.pyc
+*.py[cod]
 *.egg-info/
 .superpowers/
 archive/
+
+# 测试、构建和工具缓存
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+
+# 本地运行产生的文件、下载临时文件和数据库备份
+*.log
+*.part
+*.bak
+*.sqlite3
+*.sqlite3-*
+*.db
+
+# 本地环境变量（可提交 .env.example）
+.env
+.env.*
+!.env.example
